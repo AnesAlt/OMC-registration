@@ -6,9 +6,9 @@ from discord import app_commands
 import config
 import utils
 from views import RegistrationView, ConfirmationView, DeleteConfirmationView
+from database import get_db
 import os
 import asyncio
-from database import get_db
 
 # Import and start health check server
 from keep_alive import keep_alive
@@ -28,26 +28,36 @@ bot = commands.Bot(
     help_command=None
 )
 
+# IMPORTANT: Define tasks BEFORE they're used
+@tasks.loop(seconds=120)
+async def db_keepalive():
+    """Periodic task to keep DB connection alive and reconnect if needed"""
+    try:
+        db = get_db()
+        db.ensure_connection()
+    except Exception as e:
+        print(f"⚠️ DB keepalive ping failed: {e}")
+
 @bot.tree.command(name="ping_bot", description="Basic ping to verify bot is responsive")
 async def ping_bot(interaction: discord.Interaction):
     try:
-        await interaction.response.defer(ephemeral=True)
-        await interaction.edit_original_response(content="pong")
+        await interaction.response.send_message("🏓 Pong!", ephemeral=True)
     except Exception as e:
         print(f"Error in ping_bot: {e}")
-        # Avoid double responses on expired/acknowledged interactions
 
 @bot.tree.command(name="db_ping", description="Check database connectivity")
 async def db_ping(interaction: discord.Interaction):
     try:
-        from database import get_db
+        await interaction.response.defer(ephemeral=True)
         db = get_db()
         db.ensure_connection()
-        await interaction.response.defer(ephemeral=True)
         await interaction.edit_original_response(content="✅ DB connection OK")
     except Exception as e:
         print(f"DB ping failed: {e}")
-        # Avoid double responses on expired/acknowledged interactions
+        try:
+            await interaction.edit_original_response(content=f"❌ DB connection failed: {str(e)}")
+        except:
+            pass
 
 @bot.event
 async def on_ready():
@@ -57,11 +67,11 @@ async def on_ready():
     
     # Initialize database connection
     try:
-        from database import get_db
         db = get_db()
         print("✅ Database initialized successfully")
     except Exception as e:
         print(f"❌ Database initialization failed: {e}")
+        return
     
     # Add persistent view
     bot.add_view(RegistrationView())
@@ -85,7 +95,7 @@ async def on_ready():
         print(f"⚠️ Guild sync error: {e}")
 
     try:
-        # Global sync (can take up to an hour to propagate, but ensures availability everywhere)
+        # Global sync (can take up to an hour to propagate)
         global_synced = await bot.tree.sync()
         print(f"✅ Global sync complete: {len(global_synced)} commands")
     except Exception as e:
@@ -156,7 +166,6 @@ async def check_registration_status(interaction: discord.Interaction):
         except Exception as e:
             print(f"Warning: Could not chunk guild members: {e}")
         
-        # Fetch registered IDs off the event loop to avoid blocking
         registered_ids = await asyncio.to_thread(utils.get_registered_discord_ids)
         members_with_teams = []
         members_without_teams = []
@@ -493,22 +502,28 @@ async def export_registrations(interaction: discord.Interaction):
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    """Global error handler for application commands"""
     import traceback
     print(f"Command error: {error}")
     traceback.print_exc()
-    # Do not attempt to respond here to avoid double-acknowledgement/unknown interaction errors
+    
+    # Try to inform the user
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "❌ An error occurred while processing your command.",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                "❌ An error occurred.",
+                ephemeral=True
+            )
+    except:
+        # Interaction expired or already fully handled
+        pass
 
 if __name__ == "__main__":
     print("Starting Club Registration Bot...")
     keep_alive()
     bot.run(config.BOT_TOKEN)
-
-
-# Periodic task to keep DB connection alive and reconnect if needed
-@tasks.loop(seconds=120)
-async def db_keepalive():
-    try:
-        db = get_db()
-        db.ensure_connection()
-    except Exception as e:
-        print(f"⚠️ DB keepalive ping failed: {e}")
