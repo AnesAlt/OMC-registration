@@ -16,11 +16,30 @@ class DatabaseManager:
     def connect(self):
         """Connect to MySQL database"""
         try:
-            self.connection = pymysql.connect(**config.DATABASE_CONFIG)
+            # Add conservative timeouts to avoid blocking the event loop too long
+            conn_kwargs = dict(config.DATABASE_CONFIG)
+            conn_kwargs.setdefault('connect_timeout', 5)
+            conn_kwargs.setdefault('read_timeout', 5)
+            conn_kwargs.setdefault('write_timeout', 5)
+            self.connection = pymysql.connect(**conn_kwargs)
             print("✅ Connected to MySQL database")
         except Exception as e:
             print(f"❌ Database connection failed: {e}")
             raise
+
+    def ensure_connection(self):
+        """Ensure the MySQL connection is alive; reconnect if needed."""
+        try:
+            if self.connection is None:
+                self.connect()
+            else:
+                self.connection.ping(reconnect=True)
+        except Exception:
+            # Try a full reconnect
+            try:
+                self.connect()
+            except Exception as e:
+                raise e
     
     def create_tables(self):
         """Create necessary tables"""
@@ -69,6 +88,7 @@ class DatabaseManager:
     def save_registration(self, registration_data: dict) -> bool:
         """Save registration to database"""
         try:
+            self.ensure_connection()
             with self.connection.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO registrations 
@@ -97,6 +117,7 @@ class DatabaseManager:
     def is_user_registered(self, discord_id: str) -> bool:
         """Check if user is registered"""
         try:
+            self.ensure_connection()
             with self.connection.cursor() as cursor:
                 cursor.execute("SELECT 1 FROM registrations WHERE discord_id = %s", (discord_id,))
                 return cursor.fetchone() is not None
@@ -107,6 +128,7 @@ class DatabaseManager:
     def get_user_registration(self, discord_id: str) -> Optional[dict]:
         """Get user registration data"""
         try:
+            self.ensure_connection()
             with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute("SELECT * FROM registrations WHERE discord_id = %s", (discord_id,))
                 return cursor.fetchone()
@@ -117,6 +139,7 @@ class DatabaseManager:
     def get_registered_discord_ids(self) -> set:
         """Get all registered Discord IDs"""
         try:
+            self.ensure_connection()
             with self.connection.cursor() as cursor:
                 cursor.execute("SELECT discord_id FROM registrations")
                 return {row[0] for row in cursor.fetchall()}
@@ -127,6 +150,7 @@ class DatabaseManager:
     def get_registration_stats(self) -> dict:
         """Get registration statistics"""
         try:
+            self.ensure_connection()
             with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 # Get total count
                 cursor.execute("SELECT COUNT(*) as total FROM registrations")
@@ -152,6 +176,7 @@ class DatabaseManager:
     def remove_user_registration(self, discord_id: str) -> bool:
         """Remove user registration"""
         try:
+            self.ensure_connection()
             with self.connection.cursor() as cursor:
                 cursor.execute("DELETE FROM registrations WHERE discord_id = %s", (discord_id,))
                 rowcount = cursor.rowcount
@@ -165,6 +190,7 @@ class DatabaseManager:
     def modify_user_registration(self, discord_id: str, field: str, new_value: str) -> Tuple[bool, str]:
         """Modify a specific field in user registration"""
         try:
+            self.ensure_connection()
             # Map field names to database columns
             field_mapping = {
                 'first_name': 'first_name',
@@ -202,6 +228,7 @@ class DatabaseManager:
     def export_to_csv(self, filepath: str) -> bool:
         """Export all registrations to CSV"""
         try:
+            self.ensure_connection()
             with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute("""
                     SELECT last_name, first_name, photo, year_major, student_id, 
@@ -236,6 +263,7 @@ class DatabaseManager:
     def log_admin_action(self, action: str, admin_user, details: str = ""):
         """Log admin actions to database"""
         try:
+            self.ensure_connection()
             with self.connection.cursor() as cursor:
                 cursor.execute("""
                     INSERT INTO admin_logs (action, admin_discord_id, admin_name, details)
