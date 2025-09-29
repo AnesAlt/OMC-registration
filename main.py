@@ -30,10 +30,14 @@ bot = commands.Bot(
 @bot.tree.command(name="ping_bot", description="Basic ping to verify bot is responsive")
 async def ping_bot(interaction: discord.Interaction):
     try:
-        await interaction.response.send_message("pong", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        await interaction.followup.send("pong", ephemeral=True)
     except Exception as e:
         print(f"Error in ping_bot: {e}")
-        await interaction.response.send_message("❌ Error.", ephemeral=True)
+        try:
+            await interaction.followup.send("❌ Error.", ephemeral=True)
+        except Exception:
+            pass
 
 @bot.tree.command(name="db_ping", description="Check database connectivity")
 async def db_ping(interaction: discord.Interaction):
@@ -41,10 +45,14 @@ async def db_ping(interaction: discord.Interaction):
         from database import get_db
         db = get_db()
         db.ensure_connection()
-        await interaction.response.send_message("✅ DB connection OK", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        await interaction.followup.send("✅ DB connection OK", ephemeral=True)
     except Exception as e:
         print(f"DB ping failed: {e}")
-        await interaction.response.send_message(f"❌ DB error: {e}", ephemeral=True)
+        try:
+            await interaction.followup.send(f"❌ DB error: {e}", ephemeral=True)
+        except Exception:
+            pass
 
 @bot.event
 async def on_ready():
