@@ -11,7 +11,7 @@ import asyncio
 from datetime import datetime
 
 # Your server ID
-GUILD_ID = 1402970512229142558
+GUILD_ID = 659857443299393547
 
 # Create bot instance
 intents = discord.Intents.default()
@@ -376,3 +376,4 @@ if __name__ == "__main__":
     else:
         raise RuntimeError("BOT_TOKEN is missing! Check Render variables.")
     bot.run(config.BOT_TOKEN)
+
