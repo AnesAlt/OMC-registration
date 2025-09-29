@@ -11,35 +11,18 @@ class RegistrationView(discord.ui.View):
 
     @discord.ui.button(label="Register for Club", style=discord.ButtonStyle.primary, emoji="📝", custom_id="registration_button")
     async def register_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Check registration eligibility first
-        is_eligible, reason = utils.check_registration_eligibility(interaction.user)
-        if not is_eligible:
-            await interaction.response.send_message(
-                f"❌ **{reason}**",
-                ephemeral=True
-            )
-            return
-        
-        # Handle DB outage gracefully
+        # Open the registration modal immediately to avoid timeouts; validation occurs on submit
         try:
-            if utils.is_user_registered(str(interaction.user.id)):
-                await interaction.response.send_message(
-                    "❌ **Already Registered!**\n"
-                    "You have already completed your club registration. "
-                    "Each member can only register once.",
-                    ephemeral=True
-                )
-                return
-        except Exception:
-            await interaction.response.send_message(
-                "❌ Registration system is temporarily unavailable. Please try again in a moment.",
-                ephemeral=True
-            )
-            return
-        
-        from modals import RegistrationModal  # Import here to avoid circular import
-        modal = RegistrationModal()
-        await interaction.response.send_modal(modal)
+            print(f"Register button clicked by {interaction.user}")
+            from modals import RegistrationModal  # Import here to avoid circular import
+            modal = RegistrationModal()
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            print(f"Error opening RegistrationModal: {e}")
+            try:
+                await interaction.response.send_message("❌ Could not open the form. Please try again.", ephemeral=True)
+            except Exception:
+                pass
 
 class TeamSelectionView(discord.ui.View):
     def __init__(self, nom, prenom, photo, annee_specialite, matricule, phone, email, discord_id):

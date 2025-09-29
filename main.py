@@ -95,6 +95,7 @@ async def on_ready():
 @bot.tree.command(name="setup_registration", description="Setup registration panel (Admin only)")
 async def setup_registration(interaction: discord.Interaction, channel: discord.TextChannel = None):
     """Setup registration panel"""
+    print(f"/setup_registration invoked by {interaction.user} in #{interaction.channel.name if interaction.channel else 'DM'}")
     try:
         if not utils.has_admin_permissions(interaction.user):
             await interaction.response.send_message("❌ No permission!", ephemeral=True)
@@ -128,10 +129,13 @@ async def setup_registration(interaction: discord.Interaction, channel: discord.
 @bot.tree.command(name="registration_stats", description="View registration statistics (Admin only)")
 async def registration_stats(interaction: discord.Interaction):
     """Show stats"""
+    print(f"/registration_stats invoked by {interaction.user}")
     if not utils.has_admin_permissions(interaction.user):
         await interaction.response.send_message("❌ No permission!", ephemeral=True)
         return
     
+    await interaction.response.defer(ephemeral=True)
+
     stats = utils.get_registration_stats()
     embed = discord.Embed(title="📊 Registration Statistics", color=discord.Color.green())
     embed.add_field(name="Total", value=f"**{stats['total']}** members", inline=False)
@@ -140,12 +144,13 @@ async def registration_stats(interaction: discord.Interaction):
         teams_text = "\n".join([f"**{team}:** {count}" for team, count in stats['teams'].items()])
         embed.add_field(name="Teams", value=teams_text, inline=False)
     
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.followup.send(embed=embed)
 
 # Registration Management Commands
 @bot.tree.command(name="check_registration_status", description="Check registration status by member type (Admin only)")
 async def check_registration_status(interaction: discord.Interaction):
     """Show detailed registration status"""
+    print(f"/check_registration_status invoked by {interaction.user}")
     if not utils.has_admin_permissions(interaction.user):
         await interaction.response.send_message("❌ No permission!", ephemeral=True)
         return
@@ -182,6 +187,7 @@ async def check_registration_status(interaction: discord.Interaction):
 @bot.tree.command(name="assign_not_renewed", description="Assign 'not renewed' role to existing team members who didn't register (Admin only)")
 async def assign_not_renewed(interaction: discord.Interaction):
     """Assign not renewed role to existing team members"""
+    print(f"/assign_not_renewed invoked by {interaction.user}")
     if not utils.has_admin_permissions(interaction.user):
         await interaction.response.send_message("❌ No permission!", ephemeral=True)
         return
@@ -234,6 +240,7 @@ async def assign_not_renewed(interaction: discord.Interaction):
 @bot.tree.command(name="assign_unverified", description="Assign unverified role to new members (Admin only)")
 async def assign_unverified(interaction: discord.Interaction):
     """Assign unverified role to new members"""
+    print(f"/assign_unverified invoked by {interaction.user}")
     if not utils.has_admin_permissions(interaction.user):
         await interaction.response.send_message("❌ No permission!", ephemeral=True)
         return
@@ -285,6 +292,7 @@ async def assign_unverified(interaction: discord.Interaction):
 @bot.tree.command(name="kick_new_members", description="Kick unregistered new members (without existing team roles) (Admin only)")
 async def kick_new_members(interaction: discord.Interaction):
     """Kick only new members without existing team roles"""
+    print(f"/kick_new_members invoked by {interaction.user}")
     if not utils.has_admin_permissions(interaction.user):
         await interaction.response.send_message("❌ No permission!", ephemeral=True)
         return
@@ -372,6 +380,7 @@ async def kick_new_members(interaction: discord.Interaction):
 @bot.tree.command(name="search_registration", description="Search registration (Admin only)")
 async def search_registration(interaction: discord.Interaction, user: discord.Member):
     """Search user registration"""
+    print(f"/search_registration invoked by {interaction.user} for {user}")
     if not utils.has_admin_permissions(interaction.user):
         await interaction.response.send_message("❌ No permission!", ephemeral=True)
         return
@@ -394,6 +403,7 @@ async def search_registration(interaction: discord.Interaction, user: discord.Me
 @bot.tree.command(name="delete_registration", description="Delete registration (Admin only)")
 async def delete_registration(interaction: discord.Interaction, user: discord.Member):
     """Delete registration"""
+    print(f"/delete_registration invoked by {interaction.user} for {user}")
     if not utils.has_admin_permissions(interaction.user):
         await interaction.response.send_message("❌ No permission!", ephemeral=True)
         return
@@ -420,6 +430,7 @@ async def delete_registration(interaction: discord.Interaction, user: discord.Me
 @bot.tree.command(name="export_registrations", description="Export CSV (Admin only)")
 async def export_registrations(interaction: discord.Interaction):
     """Export CSV"""
+    print(f"/export_registrations invoked by {interaction.user}")
     if not utils.has_admin_permissions(interaction.user):
         await interaction.response.send_message("❌ No permission!", ephemeral=True)
         return
