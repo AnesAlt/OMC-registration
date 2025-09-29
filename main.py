@@ -95,22 +95,35 @@ async def on_ready():
 @bot.tree.command(name="setup_registration", description="Setup registration panel (Admin only)")
 async def setup_registration(interaction: discord.Interaction, channel: discord.TextChannel = None):
     """Setup registration panel"""
-    if not utils.has_admin_permissions(interaction.user):
-        await interaction.response.send_message("❌ No permission!", ephemeral=True)
-        return
-    
-    if channel is None:
-        channel = interaction.channel
-    
-    embed = utils.create_registration_embed()
-    view = RegistrationView()
-    
     try:
-        await channel.send(embed=embed, view=view)
-        await interaction.response.send_message(f"✅ Panel setup in {channel.mention}!", ephemeral=True)
-        utils.log_action("SETUP_REGISTRATION", interaction.user, f"Channel: {channel.name}")
-    except discord.Forbidden:
-        await interaction.response.send_message(f"❌ No permission in {channel.mention}!", ephemeral=True)
+        if not utils.has_admin_permissions(interaction.user):
+            await interaction.response.send_message("❌ No permission!", ephemeral=True)
+            return
+        
+        # Acknowledge quickly to avoid timeouts / retries
+        await interaction.response.defer(ephemeral=True)
+
+        if channel is None:
+            channel = interaction.channel
+        
+        embed = utils.create_registration_embed()
+        view = RegistrationView()
+        
+        try:
+            await channel.send(embed=embed, view=view)
+            await interaction.followup.send(f"✅ Panel setup in {channel.mention}!", ephemeral=True)
+            utils.log_action("SETUP_REGISTRATION", interaction.user, f"Channel: {channel.name}")
+        except discord.Forbidden:
+            await interaction.followup.send(f"❌ No permission in {channel.mention}!", ephemeral=True)
+    except Exception as e:
+        print(f"setup_registration error: {e}")
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ Command error occurred.", ephemeral=True)
+            else:
+                await interaction.followup.send("❌ Command error occurred.", ephemeral=True)
+        except Exception:
+            pass
 
 @bot.tree.command(name="registration_stats", description="View registration statistics (Admin only)")
 async def registration_stats(interaction: discord.Interaction):
