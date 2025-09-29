@@ -75,15 +75,11 @@ async def db_ping(interaction: discord.Interaction):
 
 @bot.event
 async def on_ready():
-
-    """Called when bot is ready"""
     print(f'{bot.user} has connected to Discord!')
     print(f'Bot is in {len(bot.guilds)} guilds:')
     for guild in bot.guilds:
         print(f"  → {guild.name} (ID: {guild.id})")
-    print(f"Attempting to sync to GUILD_ID: {GUILD_ID}")
     
-    # Initialize database connection
     try:
         db = get_db()
         print("✅ Database initialized successfully")
@@ -91,11 +87,9 @@ async def on_ready():
         print(f"❌ Database initialization failed: {e}")
         return
     
-    # Add persistent view
     bot.add_view(RegistrationView())
     print("Persistent views loaded!")
     
-    # Start DB keepalive task to prevent idle disconnects
     try:
         if not db_keepalive.is_running():
             db_keepalive.start()
@@ -103,17 +97,15 @@ async def on_ready():
     except Exception as e:
         print(f"⚠️ Could not start DB keepalive task: {e}")
     
-    # Sync commands globally and to guild (guild sync is faster)
-    try:
-        # Try guild sync for immediate availability in your main server
-        guild = discord.Object(id=GUILD_ID)
-        guild_synced = await bot.tree.sync(guild=guild)
-        print(f"✅ Guild sync complete: {len(guild_synced)} commands")
-    except Exception as e:
-        print(f"⚠️ Guild sync error: {e}")
+    # COMMENT OUT GUILD SYNC - Use global only
+    # try:
+    #     guild = discord.Object(id=GUILD_ID)
+    #     guild_synced = await bot.tree.sync(guild=guild)
+    #     print(f"✅ Guild sync complete: {len(guild_synced)} commands")
+    # except Exception as e:
+    #     print(f"⚠️ Guild sync error: {e}")
 
     try:
-        # Global sync (can take up to an hour to propagate)
         global_synced = await bot.tree.sync()
         print(f"✅ Global sync complete: {len(global_synced)} commands")
     except Exception as e:
