@@ -20,12 +20,19 @@ class RegistrationView(discord.ui.View):
             )
             return
         
-        # Check if user is already registered
-        if utils.is_user_registered(str(interaction.user.id)):
+        # Handle DB outage gracefully
+        try:
+            if utils.is_user_registered(str(interaction.user.id)):
+                await interaction.response.send_message(
+                    "❌ **Already Registered!**\n"
+                    "You have already completed your club registration. "
+                    "Each member can only register once.",
+                    ephemeral=True
+                )
+                return
+        except Exception:
             await interaction.response.send_message(
-                "❌ **Already Registered!**\n"
-                "You have already completed your club registration. "
-                "Each member can only register once.",
+                "❌ Registration system is temporarily unavailable. Please try again in a moment.",
                 ephemeral=True
             )
             return

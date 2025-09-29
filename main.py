@@ -71,17 +71,10 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Failed to load persistent views: {e}")
     
-    # Sync commands globally and also per-guild for immediate availability
+    # Sync commands globally only (avoid duplicate commands)
     try:
         global_synced = await bot.tree.sync()
         print(f"✅ Successfully synced {len(global_synced)} global commands!")
-        for g in bot.guilds:
-            try:
-                bot.tree.copy_global_to(guild=discord.Object(id=g.id))
-                guild_synced = await bot.tree.sync(guild=discord.Object(id=g.id))
-                print(f"✅ Synced {len(guild_synced)} commands to guild {g.name} ({g.id})")
-            except Exception as ge:
-                print(f"❌ Guild sync error for {g.name} ({g.id}): {ge}")
     except Exception as e:
         print(f"❌ Sync error: {e}")
 

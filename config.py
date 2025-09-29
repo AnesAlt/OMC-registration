@@ -2,6 +2,7 @@
 
 import os
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 # Load environment variables
 load_dotenv()
@@ -9,16 +10,31 @@ load_dotenv()
 # Bot Token
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# MySQL Database Configuration (Railway provides these as environment variables)
-DATABASE_CONFIG = {
-    'host': os.getenv('MYSQLHOST', 'localhost'),
-    'port': int(os.getenv('MYSQLPORT', 3306)),
-    'user': os.getenv('MYSQLUSER', 'root'),
-    'password': os.getenv('MYSQLPASSWORD', ''),
-    'database': os.getenv('MYSQLDATABASE', 'railway'),
-    'charset': 'utf8mb4',
-    'autocommit': True
-}
+# MySQL Database Configuration
+# Prefer a full DATABASE URL if available (e.g., Railway MYSQL_PUBLIC_URL)
+_db_url = os.getenv('MYSQL_PUBLIC_URL') or os.getenv('MYSQL_URL')
+
+if _db_url:
+    parsed = urlparse(_db_url)
+    DATABASE_CONFIG = {
+        'host': parsed.hostname or os.getenv('MYSQLHOST', 'localhost'),
+        'port': parsed.port or int(os.getenv('MYSQLPORT', 3306)),
+        'user': (parsed.username or os.getenv('MYSQLUSER', 'root')),
+        'password': (parsed.password or os.getenv('MYSQLPASSWORD', '')),
+        'database': (parsed.path.lstrip('/') if parsed.path else os.getenv('MYSQLDATABASE', 'railway')),
+        'charset': 'utf8mb4',
+        'autocommit': True
+    }
+else:
+    DATABASE_CONFIG = {
+        'host': os.getenv('MYSQLHOST', 'localhost'),
+        'port': int(os.getenv('MYSQLPORT', 3306)),
+        'user': os.getenv('MYSQLUSER', 'root'),
+        'password': os.getenv('MYSQLPASSWORD', ''),
+        'database': os.getenv('MYSQLDATABASE', 'railway'),
+        'charset': 'utf8mb4',
+        'autocommit': True
+    }
 
 # Role IDs
 ADMIN_ROLE_IDS = [
