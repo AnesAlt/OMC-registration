@@ -9,6 +9,9 @@ from views import RegistrationView, ConfirmationView, DeleteConfirmationView
 from database import get_db
 import os
 import asyncio
+import sys
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 
 print("=" * 50)
