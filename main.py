@@ -480,6 +480,51 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         # Swallow errors like Unknown interaction (already timed out)
         pass
 
+# testttttttt
+@bot.tree.command(name="test_db", description="Test database connection (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
+async def test_db(interaction: discord.Interaction):
+    """Test database connectivity"""
+    if not utils.has_admin_permissions(interaction.user):
+        await interaction.response.send_message("❌ No permission!", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    import traceback
+    results = []
+    
+    # Test 1: Get DB instance
+    try:
+        from database import get_db
+        db = get_db()
+        results.append("✅ Database instance created")
+    except Exception as e:
+        results.append(f"❌ DB instance failed: {e}")
+        await interaction.followup.send("\n".join(results))
+        return
+    
+    # Test 2: Get connection from pool
+    try:
+        conn = db.get_connection()
+        results.append("✅ Got connection from pool")
+        conn.close()
+    except Exception as e:
+        error_trace = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+        results.append(f"❌ Connection failed:\n```{error_trace[:1000]}```")
+        await interaction.followup.send("\n".join(results))
+        return
+    
+    # Test 3: Simple query
+    try:
+        stats = db.get_registration_stats()
+        results.append(f"✅ Query successful: {stats['total']} registrations")
+    except Exception as e:
+        error_trace = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+        results.append(f"❌ Query failed:\n```{error_trace[:1000]}```")
+    
+    await interaction.followup.send("\n".join(results))
+
 # Run bot
 if __name__ == "__main__":
     print("Starting Club Registration Bot...")
@@ -488,4 +533,5 @@ if __name__ == "__main__":
     keep_alive()
     
     # Run Discord bot
+
     bot.run(config.BOT_TOKEN)
