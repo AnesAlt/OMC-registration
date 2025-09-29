@@ -75,9 +75,13 @@ async def db_ping(interaction: discord.Interaction):
 
 @bot.event
 async def on_ready():
+
     """Called when bot is ready"""
     print(f'{bot.user} has connected to Discord!')
-    print(f'Bot is in {len(bot.guilds)} guilds')
+    print(f'Bot is in {len(bot.guilds)} guilds:')
+    for guild in bot.guilds:
+        print(f"  → {guild.name} (ID: {guild.id})")
+    print(f"Attempting to sync to GUILD_ID: {GUILD_ID}")
     
     # Initialize database connection
     try:
