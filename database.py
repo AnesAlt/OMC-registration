@@ -1,6 +1,8 @@
 # database.py - MySQL Database Utilities
 
 import pymysql
+from pymysql import OperationalError, InterfaceError
+import time
 import os
 import csv
 from datetime import datetime
@@ -10,6 +12,7 @@ import config
 class DatabaseManager:
     def __init__(self):
         self.connection = None
+        self.last_ping = 0
         self.connect()
         self.create_tables()
     
@@ -18,10 +21,11 @@ class DatabaseManager:
         try:
             # Add conservative timeouts to avoid blocking the event loop too long
             conn_kwargs = dict(config.DATABASE_CONFIG)
-            conn_kwargs.setdefault('connect_timeout', 5)
-            conn_kwargs.setdefault('read_timeout', 5)
-            conn_kwargs.setdefault('write_timeout', 5)
+            conn_kwargs.setdefault('connect_timeout', 10)
+            conn_kwargs.setdefault('read_timeout', 10)
+            conn_kwargs.setdefault('write_timeout', 10)
             self.connection = pymysql.connect(**conn_kwargs)
+            self.last_ping = time.time()
             print("✅ Connected to MySQL database")
         except Exception as e:
             print(f"❌ Database connection failed: {e}")
@@ -30,16 +34,16 @@ class DatabaseManager:
     def ensure_connection(self):
         """Ensure the MySQL connection is alive; reconnect if needed."""
         try:
+            # Only ping periodically to avoid unnecessary calls
             if self.connection is None:
                 self.connect()
             else:
-                self.connection.ping(reconnect=True)
-        except Exception:
+                if time.time() - self.last_ping > 300:
+                    self.connection.ping(reconnect=True)
+                    self.last_ping = time.time()
+        except (OperationalError, InterfaceError, AttributeError):
             # Try a full reconnect
-            try:
-                self.connect()
-            except Exception as e:
-                raise e
+            self.connect()
     
     def create_tables(self):
         """Create necessary tables"""
@@ -277,6 +281,7 @@ class DatabaseManager:
     def get_all_registrations(self) -> List[dict]:
         """Get all registration data"""
         try:
+            self.ensure_connection()
             with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute("SELECT * FROM registrations ORDER BY timestamp DESC")
                 return cursor.fetchall()
