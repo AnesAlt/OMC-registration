@@ -30,9 +30,7 @@ ADMIN_USER_IDS = []
 # Roles that are EXCLUDED from registration (staff, alumni, bots, special cases, etc.)
 # Everyone with these roles is exempt from registration
 EXCLUDED_ROLE_IDS = [
-    659861001272819816, # Staff
     919642895152205824,  # Alumni
-    779766120957214742, # Bureau
 ]
 
 # EXISTING TEAM ROLE IDS - Members who already have these roles from previous year
@@ -66,4 +64,5 @@ TEAM_OPTIONS = [
 ]
 
 # Bot settings
+
 REGISTRATION_TIMEOUT = 300  # 5 minutes timeout for registration views
