@@ -71,6 +71,18 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Failed to load persistent views: {e}")
     
+    # First, clear any guild-scoped commands to prevent duplicates
+    try:
+        for g in bot.guilds:
+            try:
+                bot.tree.clear_commands(guild=discord.Object(id=g.id))
+                cleared = await bot.tree.sync(guild=discord.Object(id=g.id))
+                print(f"🧹 Cleared guild commands in {g.name} ({g.id}); {len(cleared)} remain")
+            except Exception as ge:
+                print(f"❌ Failed clearing guild commands for {g.name} ({g.id}): {ge}")
+    except Exception as e:
+        print(f"❌ Bulk guild clear error: {e}")
+
     # Sync commands globally only (avoid duplicate commands)
     try:
         global_synced = await bot.tree.sync()
