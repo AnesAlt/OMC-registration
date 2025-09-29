@@ -1,4 +1,4 @@
-# main.py - Club Registration Bot (MySQL version)
+# main.py - Club Registration Bot (MySQL version with health check)
 
 import discord
 from discord.ext import commands
@@ -8,8 +8,11 @@ import utils
 from views import RegistrationView, ConfirmationView, DeleteConfirmationView
 import os
 
+# Import and start health check server
+from keep_alive import keep_alive
+
 # Your server ID
-GUILD_ID = 1402970512229142558
+GUILD_ID = 659857443299393547
 
 # Create bot instance
 intents = discord.Intents.default()
@@ -242,16 +245,6 @@ async def kick_new_members(interaction: discord.Interaction):
         await interaction.response.send_message("❌ No permission!", ephemeral=True)
         return
     
-    await interaction.response.defer
-
-@bot.tree.command(name="kick_new_members", description="Kick unregistered new members (without existing team roles) (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
-async def kick_new_members(interaction: discord.Interaction):
-    """Kick only new members without existing team roles"""
-    if not utils.has_admin_permissions(interaction.user):
-        await interaction.response.send_message("❌ No permission!", ephemeral=True)
-        return
-    
     await interaction.response.defer(ephemeral=True)
     
     # Check bot permissions
@@ -429,4 +422,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 # Run bot
 if __name__ == "__main__":
     print("Starting Club Registration Bot...")
+    
+    # Start health check server
+    keep_alive()
+    
+    # Run Discord bot
     bot.run(config.BOT_TOKEN)
