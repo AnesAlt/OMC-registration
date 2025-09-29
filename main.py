@@ -10,6 +10,17 @@ from database import get_db
 import os
 import asyncio
 
+
+print("=" * 50)
+print("ENVIRONMENT VARIABLES CHECK")
+print(f"BOT_TOKEN: {'SET' if os.getenv('BOT_TOKEN') else 'MISSING'}")
+print(f"MYSQL_PUBLIC_URL: {os.getenv('MYSQL_PUBLIC_URL', 'NOT SET')}")
+print(f"MYSQL_URL: {os.getenv('MYSQL_URL', 'NOT SET')}")
+print(f"MYSQLHOST: {os.getenv('MYSQLHOST', 'NOT SET')}")
+print(f"MYSQLUSER: {os.getenv('MYSQLUSER', 'NOT SET')}")
+print(f"MYSQLDATABASE: {os.getenv('MYSQLDATABASE', 'NOT SET')}")
+print("=" * 50)
+
 # Import and start health check server
 from keep_alive import keep_alive
 

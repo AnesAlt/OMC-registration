@@ -16,10 +16,11 @@ class DatabaseManager:
         self.connect()
         self.create_tables()
     
+# In database.py, modify connect():
     def connect(self):
         """Connect to MySQL database"""
         try:
-            # Add conservative timeouts to avoid blocking the event loop too long
+            print(f"🔍 Attempting connection with config: {config.DATABASE_CONFIG}")
             conn_kwargs = dict(config.DATABASE_CONFIG)
             conn_kwargs.setdefault('connect_timeout', 10)
             conn_kwargs.setdefault('read_timeout', 10)
@@ -29,6 +30,8 @@ class DatabaseManager:
             print("✅ Connected to MySQL database")
         except Exception as e:
             print(f"❌ Database connection failed: {e}")
+            import traceback
+            traceback.print_exc()
             raise
 
     def ensure_connection(self):
