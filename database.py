@@ -91,32 +91,48 @@ class DatabaseManager:
     
     def save_registration(self, registration_data: dict) -> bool:
         """Save registration to database"""
-        try:
-            self.ensure_connection()
-            with self.connection.cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO registrations 
-                    (discord_id, last_name, first_name, photo, year_major, student_id, 
-                     phone, email, team, timestamp)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    registration_data['discord_id'],
-                    registration_data['nom'],
-                    registration_data['prenom'],
-                    registration_data['photo'],
-                    registration_data['annee_specialite'],
-                    registration_data['matricule'],
-                    registration_data['phone'],
-                    registration_data['email'],
-                    registration_data['team'],
-                    datetime.fromisoformat(registration_data['timestamp'])
-                ))
-            self.connection.commit()
-            return True
-        except Exception as e:
-            print(f"❌ Error saving registration: {e}")
-            self.connection.rollback()
-            return False
+        for attempt in range(2):
+            try:
+                self.ensure_connection()
+                with self.connection.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO registrations 
+                        (discord_id, last_name, first_name, photo, year_major, student_id, 
+                         phone, email, team, timestamp)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        registration_data['discord_id'],
+                        registration_data['nom'],
+                        registration_data['prenom'],
+                        registration_data['photo'],
+                        registration_data['annee_specialite'],
+                        registration_data['matricule'],
+                        registration_data['phone'],
+                        registration_data['email'],
+                        registration_data['team'],
+                        datetime.fromisoformat(registration_data['timestamp'])
+                    ))
+                self.connection.commit()
+                return True
+            except (OperationalError, InterfaceError) as e:
+                print(f"⚠️ Transient DB error on save_registration (attempt {attempt+1}): {e}")
+                try:
+                    self.connect()
+                except Exception:
+                    pass
+                if attempt == 1:
+                    try:
+                        self.connection.rollback()
+                    except Exception:
+                        pass
+                    return False
+            except Exception as e:
+                print(f"❌ Error saving registration: {e}")
+                try:
+                    self.connection.rollback()
+                except Exception:
+                    pass
+                return False
     
     def is_user_registered(self, discord_id: str) -> bool:
         """Check if user is registered"""
@@ -179,55 +195,86 @@ class DatabaseManager:
     
     def remove_user_registration(self, discord_id: str) -> bool:
         """Remove user registration"""
-        try:
-            self.ensure_connection()
-            with self.connection.cursor() as cursor:
-                cursor.execute("DELETE FROM registrations WHERE discord_id = %s", (discord_id,))
-                rowcount = cursor.rowcount
-            self.connection.commit()
-            return rowcount > 0
-        except Exception as e:
-            print(f"❌ Error removing registration: {e}")
-            self.connection.rollback()
-            return False
+        for attempt in range(2):
+            try:
+                self.ensure_connection()
+                with self.connection.cursor() as cursor:
+                    cursor.execute("DELETE FROM registrations WHERE discord_id = %s", (discord_id,))
+                    rowcount = cursor.rowcount
+                self.connection.commit()
+                return rowcount > 0
+            except (OperationalError, InterfaceError) as e:
+                print(f"⚠️ Transient DB error on remove_user_registration (attempt {attempt+1}): {e}")
+                try:
+                    self.connect()
+                except Exception:
+                    pass
+                if attempt == 1:
+                    try:
+                        self.connection.rollback()
+                    except Exception:
+                        pass
+                    return False
+            except Exception as e:
+                print(f"❌ Error removing registration: {e}")
+                try:
+                    self.connection.rollback()
+                except Exception:
+                    pass
+                return False
     
     def modify_user_registration(self, discord_id: str, field: str, new_value: str) -> Tuple[bool, str]:
         """Modify a specific field in user registration"""
-        try:
-            self.ensure_connection()
-            # Map field names to database columns
-            field_mapping = {
-                'first_name': 'first_name',
-                'last_name': 'last_name',
-                'email': 'email',
-                'phone': 'phone',
-                'team': 'team',
-                'student_id': 'student_id',
-                'year_major': 'year_major',
-                'photo': 'photo'
-            }
-            
-            if field not in field_mapping:
-                return False, f"Invalid field: {field}"
-            
-            db_field = field_mapping[field]
-            
-            with self.connection.cursor() as cursor:
-                cursor.execute(f"UPDATE registrations SET {db_field} = %s WHERE discord_id = %s", 
-                             (new_value, discord_id))
-                rowcount = cursor.rowcount
-            
-            self.connection.commit()
-            
-            if rowcount > 0:
-                return True, "Registration updated successfully"
-            else:
-                return False, "User not found in registration database"
-                    
-        except Exception as e:
-            print(f"❌ Error modifying registration: {e}")
-            self.connection.rollback()
-            return False, f"Error updating registration: {str(e)}"
+        for attempt in range(2):
+            try:
+                self.ensure_connection()
+                # Map field names to database columns
+                field_mapping = {
+                    'first_name': 'first_name',
+                    'last_name': 'last_name',
+                    'email': 'email',
+                    'phone': 'phone',
+                    'team': 'team',
+                    'student_id': 'student_id',
+                    'year_major': 'year_major',
+                    'photo': 'photo'
+                }
+                
+                if field not in field_mapping:
+                    return False, f"Invalid field: {field}"
+                
+                db_field = field_mapping[field]
+                
+                with self.connection.cursor() as cursor:
+                    cursor.execute(f"UPDATE registrations SET {db_field} = %s WHERE discord_id = %s", 
+                                 (new_value, discord_id))
+                    rowcount = cursor.rowcount
+                
+                self.connection.commit()
+                
+                if rowcount > 0:
+                    return True, "Registration updated successfully"
+                else:
+                    return False, "User not found in registration database"
+            except (OperationalError, InterfaceError) as e:
+                print(f"⚠️ Transient DB error on modify_user_registration (attempt {attempt+1}): {e}")
+                try:
+                    self.connect()
+                except Exception:
+                    pass
+                if attempt == 1:
+                    try:
+                        self.connection.rollback()
+                    except Exception:
+                        pass
+                    return False, f"Error updating registration: {str(e)}"
+            except Exception as e:
+                print(f"❌ Error modifying registration: {e}")
+                try:
+                    self.connection.rollback()
+                except Exception:
+                    pass
+                return False, f"Error updating registration: {str(e)}"
     
     def export_to_csv(self, filepath: str) -> bool:
         """Export all registrations to CSV"""

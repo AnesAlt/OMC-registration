@@ -27,6 +27,25 @@ bot = commands.Bot(
     help_command=None
 )
 
+@bot.tree.command(name="ping_bot", description="Basic ping to verify bot is responsive")
+async def ping_bot(interaction: discord.Interaction):
+    try:
+        await interaction.response.send_message("pong", ephemeral=True)
+    except Exception as e:
+        print(f"Error in ping_bot: {e}")
+        await interaction.response.send_message("❌ Error.", ephemeral=True)
+
+@bot.tree.command(name="db_ping", description="Check database connectivity")
+async def db_ping(interaction: discord.Interaction):
+    try:
+        from database import get_db
+        db = get_db()
+        db.ensure_connection()
+        await interaction.response.send_message("✅ DB connection OK", ephemeral=True)
+    except Exception as e:
+        print(f"DB ping failed: {e}")
+        await interaction.response.send_message(f"❌ DB error: {e}", ephemeral=True)
+
 @bot.event
 async def on_ready():
     """Called when bot is ready"""
@@ -53,18 +72,25 @@ async def on_ready():
     except Exception as e:
         print(f"⚠️ Could not start DB keepalive task: {e}")
     
-    # Sync commands to guild (instant updates)
+    # Sync commands globally and to guild (guild sync is faster)
     try:
+        # Try guild sync for immediate availability in your main server
         guild = discord.Object(id=GUILD_ID)
-        synced = await bot.tree.sync(guild=guild)
-        print(f"✅ Successfully synced {len(synced)} commands to guild!")
+        guild_synced = await bot.tree.sync(guild=guild)
+        print(f"✅ Guild sync complete: {len(guild_synced)} commands")
     except Exception as e:
-        print(f"❌ Sync error: {e}")
+        print(f"⚠️ Guild sync error: {e}")
+
+    try:
+        # Global sync (can take up to an hour to propagate, but ensures availability everywhere)
+        global_synced = await bot.tree.sync()
+        print(f"✅ Global sync complete: {len(global_synced)} commands")
+    except Exception as e:
+        print(f"❌ Global sync error: {e}")
 
 
 # Basic Commands
 @bot.tree.command(name="setup_registration", description="Setup registration panel (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def setup_registration(interaction: discord.Interaction, channel: discord.TextChannel = None):
     """Setup registration panel"""
     try:
@@ -90,7 +116,6 @@ async def setup_registration(interaction: discord.Interaction, channel: discord.
         await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="registration_stats", description="View registration statistics (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def registration_stats(interaction: discord.Interaction):
     """Show stats"""
     try:
@@ -114,7 +139,6 @@ async def registration_stats(interaction: discord.Interaction):
         await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="check_registration_status", description="Check registration status by member type (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def check_registration_status(interaction: discord.Interaction):
     """Show detailed registration status"""
     try:
@@ -154,7 +178,6 @@ async def check_registration_status(interaction: discord.Interaction):
         await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="assign_not_renewed", description="Assign 'not renewed' role to existing team members who didn't register (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def assign_not_renewed(interaction: discord.Interaction):
     """Assign not renewed role to existing team members"""
     try:
@@ -208,7 +231,6 @@ async def assign_not_renewed(interaction: discord.Interaction):
         await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="assign_unverified", description="Assign unverified role to new members (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def assign_unverified(interaction: discord.Interaction):
     """Assign unverified role to new members"""
     try:
@@ -262,7 +284,6 @@ async def assign_unverified(interaction: discord.Interaction):
         await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="kick_new_members", description="Kick unregistered new members (without existing team roles) (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def kick_new_members(interaction: discord.Interaction):
     """Kick only new members without existing team roles"""
     try:
@@ -344,7 +365,6 @@ async def kick_new_members(interaction: discord.Interaction):
         await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="search_registration", description="Search registration (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def search_registration(interaction: discord.Interaction, user: discord.Member):
     """Search user registration"""
     try:
@@ -371,7 +391,6 @@ async def search_registration(interaction: discord.Interaction, user: discord.Me
         await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="delete_registration", description="Delete registration (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def delete_registration(interaction: discord.Interaction, user: discord.Member):
     """Delete registration"""
     try:
@@ -402,7 +421,6 @@ async def delete_registration(interaction: discord.Interaction, user: discord.Me
         await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="export_registrations", description="Export CSV (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def export_registrations(interaction: discord.Interaction):
     """Export CSV"""
     try:
@@ -451,7 +469,7 @@ if __name__ == "__main__":
 
 
 # Periodic task to keep DB connection alive and reconnect if needed
-@tasks.loop(seconds=240)
+@tasks.loop(seconds=120)
 async def db_keepalive():
     try:
         db = get_db()
