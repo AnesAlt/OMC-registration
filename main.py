@@ -31,13 +31,10 @@ bot = commands.Bot(
 async def ping_bot(interaction: discord.Interaction):
     try:
         await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send("pong", ephemeral=True)
+        await interaction.edit_original_response(content="pong")
     except Exception as e:
         print(f"Error in ping_bot: {e}")
-        try:
-            await interaction.followup.send("❌ Error.", ephemeral=True)
-        except Exception:
-            pass
+        # Avoid double responses on expired/acknowledged interactions
 
 @bot.tree.command(name="db_ping", description="Check database connectivity")
 async def db_ping(interaction: discord.Interaction):
@@ -46,13 +43,10 @@ async def db_ping(interaction: discord.Interaction):
         db = get_db()
         db.ensure_connection()
         await interaction.response.defer(ephemeral=True)
-        await interaction.followup.send("✅ DB connection OK", ephemeral=True)
+        await interaction.edit_original_response(content="✅ DB connection OK")
     except Exception as e:
         print(f"DB ping failed: {e}")
-        try:
-            await interaction.followup.send(f"❌ DB error: {e}", ephemeral=True)
-        except Exception:
-            pass
+        # Avoid double responses on expired/acknowledged interactions
 
 @bot.event
 async def on_ready():
@@ -462,13 +456,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     import traceback
     print(f"Command error: {error}")
     traceback.print_exc()
-    try:
-        if not interaction.response.is_done():
-            await interaction.response.send_message("❌ Command error occurred.", ephemeral=True)
-        else:
-            await interaction.followup.send("❌ Command error occurred.", ephemeral=True)
-    except:
-        pass
+    # Do not attempt to respond here to avoid double-acknowledgement/unknown interaction errors
 
 if __name__ == "__main__":
     print("Starting Club Registration Bot...")
