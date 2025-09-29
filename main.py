@@ -7,6 +7,7 @@ import config
 import utils
 from views import RegistrationView, ConfirmationView, DeleteConfirmationView
 import os
+import asyncio
 from database import get_db
 
 # Import and start health check server
@@ -127,7 +128,7 @@ async def registration_stats(interaction: discord.Interaction):
         
         await interaction.response.defer(ephemeral=True)
 
-        stats = utils.get_registration_stats()
+        stats = await asyncio.to_thread(utils.get_registration_stats)
         embed = discord.Embed(title="📊 Registration Statistics", color=discord.Color.green())
         embed.add_field(name="Total", value=f"**{stats['total']}** members", inline=False)
         
@@ -155,7 +156,20 @@ async def check_registration_status(interaction: discord.Interaction):
         except Exception as e:
             print(f"Warning: Could not chunk guild members: {e}")
         
-        members_with_teams, members_without_teams = utils.get_unregistered_members_with_teams(interaction.guild)
+        # Fetch registered IDs off the event loop to avoid blocking
+        registered_ids = await asyncio.to_thread(utils.get_registered_discord_ids)
+        members_with_teams = []
+        members_without_teams = []
+        for member in interaction.guild.members:
+            if str(member.id) not in registered_ids:
+                is_eligible, _ = utils.check_registration_eligibility(member)
+                if is_eligible:
+                    user_role_ids = [role.id for role in member.roles]
+                    has_existing_team = any(role_id in config.EXISTING_TEAM_ROLE_IDS for role_id in user_role_ids)
+                    if has_existing_team:
+                        members_with_teams.append(member)
+                    else:
+                        members_without_teams.append(member)
         
         embed = discord.Embed(title="📊 Registration Status by Member Type", color=discord.Color.blue())
         
@@ -199,7 +213,15 @@ async def assign_not_renewed(interaction: discord.Interaction):
             await interaction.followup.send("❌ 'Not renewed' role not found! Check NOT_RENEWED_ROLE_ID in config.py")
             return
         
-        members_with_teams, _ = utils.get_unregistered_members_with_teams(interaction.guild)
+        registered_ids = await asyncio.to_thread(utils.get_registered_discord_ids)
+        members_with_teams = []
+        for member in interaction.guild.members:
+            if str(member.id) not in registered_ids:
+                is_eligible, _ = utils.check_registration_eligibility(member)
+                if is_eligible:
+                    user_role_ids = [role.id for role in member.roles]
+                    if any(role_id in config.EXISTING_TEAM_ROLE_IDS for role_id in user_role_ids):
+                        members_with_teams.append(member)
         
         if not members_with_teams:
             await interaction.followup.send("✅ All existing team members have registered!")
@@ -252,7 +274,16 @@ async def assign_unverified(interaction: discord.Interaction):
             await interaction.followup.send("❌ Unverified role not found!")
             return
         
-        _, members_without_teams = utils.get_unregistered_members_with_teams(interaction.guild)
+        registered_ids = await asyncio.to_thread(utils.get_registered_discord_ids)
+        members_without_teams = []
+        for member in interaction.guild.members:
+            if str(member.id) not in registered_ids:
+                is_eligible, _ = utils.check_registration_eligibility(member)
+                if is_eligible:
+                    user_role_ids = [role.id for role in member.roles]
+                    has_existing_team = any(role_id in config.EXISTING_TEAM_ROLE_IDS for role_id in user_role_ids)
+                    if not has_existing_team:
+                        members_without_teams.append(member)
         
         if not members_without_teams:
             await interaction.followup.send("✅ All new members have registered!")
@@ -305,7 +336,16 @@ async def kick_new_members(interaction: discord.Interaction):
         except Exception as e:
             print(f"Warning: Could not chunk guild members: {e}")
         
-        _, members_without_teams = utils.get_unregistered_members_with_teams(interaction.guild)
+        registered_ids = await asyncio.to_thread(utils.get_registered_discord_ids)
+        members_without_teams = []
+        for member in interaction.guild.members:
+            if str(member.id) not in registered_ids:
+                is_eligible, _ = utils.check_registration_eligibility(member)
+                if is_eligible:
+                    user_role_ids = [role.id for role in member.roles]
+                    has_existing_team = any(role_id in config.EXISTING_TEAM_ROLE_IDS for role_id in user_role_ids)
+                    if not has_existing_team:
+                        members_without_teams.append(member)
         
         kickable_members = []
         skipped_members = []
@@ -375,7 +415,7 @@ async def search_registration(interaction: discord.Interaction, user: discord.Me
             return
         
         await interaction.response.defer(ephemeral=True)
-        registration = utils.get_user_registration(str(user.id))
+        registration = await asyncio.to_thread(utils.get_user_registration, str(user.id))
         
         if registration:
             embed = discord.Embed(title=f"Registration: {user.display_name}", color=discord.Color.blue())
@@ -402,7 +442,7 @@ async def delete_registration(interaction: discord.Interaction, user: discord.Me
         
         await interaction.response.defer(ephemeral=True)
         
-        registration = utils.get_user_registration(str(user.id))
+        registration = await asyncio.to_thread(utils.get_user_registration, str(user.id))
         if not registration:
             await interaction.followup.send(f"❌ {user.mention} not registered.")
             return
@@ -432,7 +472,7 @@ async def export_registrations(interaction: discord.Interaction):
         
         await interaction.response.defer(ephemeral=True)
         
-        success = utils.export_registrations_to_csv(config.TEMP_CSV_FILE)
+        success = await asyncio.to_thread(utils.export_registrations_to_csv, config.TEMP_CSV_FILE)
         
         if success:
             with open(config.TEMP_CSV_FILE, 'rb') as f:
