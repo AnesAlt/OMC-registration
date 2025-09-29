@@ -26,37 +26,68 @@ bot = commands.Bot(
     help_command=None
 )
 
+# Admin-only manual sync command (prefix)
+@bot.command(name='sync')
+@commands.is_owner()
+async def sync_commands(ctx: commands.Context):
+    try:
+        synced = await bot.tree.sync()
+        await ctx.send(f"✅ Synced {len(synced)} global commands.")
+    except Exception as e:
+        await ctx.send(f"❌ Sync error: {e}")
+
+# Admin utility: force sync commands to this guild now
+@bot.command(name='sync_here')
+@commands.has_permissions(administrator=True)
+async def sync_here(ctx: commands.Context):
+    try:
+        if ctx.guild is None:
+            await ctx.send("❌ Use this in a server channel.")
+            return
+        bot.tree.copy_global_to(guild=discord.Object(id=ctx.guild.id))
+        synced = await bot.tree.sync(guild=discord.Object(id=ctx.guild.id))
+        await ctx.send(f"✅ Synced {len(synced)} commands to this guild.")
+    except Exception as e:
+        await ctx.send(f"❌ Sync error: {e}")
+
 @bot.event
 async def on_ready():
     """Called when bot is ready"""
     print(f'{bot.user} has connected to Discord!')
     print(f'Bot is in {len(bot.guilds)} guilds')
     
-    # Initialize database connection
+    # Initialize database connection (do not block command sync if this fails)
     try:
         from database import get_db
         db = get_db()
         print("✅ Database initialized successfully")
     except Exception as e:
-        print(f"❌ Database initialization failed: {e}")
-        return
+        print(f"❌ Database initialization failed (continuing without DB): {e}")
     
     # Add persistent view
-    bot.add_view(RegistrationView())
-    print("Persistent views loaded!")
-    
-    # Sync commands
     try:
-        guild = discord.Object(id=GUILD_ID)
-        synced = await bot.tree.sync(guild=guild)
-        print(f"✅ Successfully synced {len(synced)} commands!")
+        bot.add_view(RegistrationView())
+        print("Persistent views loaded!")
+    except Exception as e:
+        print(f"❌ Failed to load persistent views: {e}")
+    
+    # Sync commands globally and also per-guild for immediate availability
+    try:
+        global_synced = await bot.tree.sync()
+        print(f"✅ Successfully synced {len(global_synced)} global commands!")
+        for g in bot.guilds:
+            try:
+                bot.tree.copy_global_to(guild=discord.Object(id=g.id))
+                guild_synced = await bot.tree.sync(guild=discord.Object(id=g.id))
+                print(f"✅ Synced {len(guild_synced)} commands to guild {g.name} ({g.id})")
+            except Exception as ge:
+                print(f"❌ Guild sync error for {g.name} ({g.id}): {ge}")
     except Exception as e:
         print(f"❌ Sync error: {e}")
 
 
 # Basic Commands
 @bot.tree.command(name="setup_registration", description="Setup registration panel (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def setup_registration(interaction: discord.Interaction, channel: discord.TextChannel = None):
     """Setup registration panel"""
     if not utils.has_admin_permissions(interaction.user):
@@ -77,7 +108,6 @@ async def setup_registration(interaction: discord.Interaction, channel: discord.
         await interaction.response.send_message(f"❌ No permission in {channel.mention}!", ephemeral=True)
 
 @bot.tree.command(name="registration_stats", description="View registration statistics (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def registration_stats(interaction: discord.Interaction):
     """Show stats"""
     if not utils.has_admin_permissions(interaction.user):
@@ -96,7 +126,6 @@ async def registration_stats(interaction: discord.Interaction):
 
 # Registration Management Commands
 @bot.tree.command(name="check_registration_status", description="Check registration status by member type (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def check_registration_status(interaction: discord.Interaction):
     """Show detailed registration status"""
     if not utils.has_admin_permissions(interaction.user):
@@ -133,7 +162,6 @@ async def check_registration_status(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="assign_not_renewed", description="Assign 'not renewed' role to existing team members who didn't register (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def assign_not_renewed(interaction: discord.Interaction):
     """Assign not renewed role to existing team members"""
     if not utils.has_admin_permissions(interaction.user):
@@ -186,7 +214,6 @@ async def assign_not_renewed(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="assign_unverified", description="Assign unverified role to new members (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def assign_unverified(interaction: discord.Interaction):
     """Assign unverified role to new members"""
     if not utils.has_admin_permissions(interaction.user):
@@ -238,7 +265,6 @@ async def assign_unverified(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="kick_new_members", description="Kick unregistered new members (without existing team roles) (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def kick_new_members(interaction: discord.Interaction):
     """Kick only new members without existing team roles"""
     if not utils.has_admin_permissions(interaction.user):
@@ -326,7 +352,6 @@ async def kick_new_members(interaction: discord.Interaction):
 
 # Individual Management Commands
 @bot.tree.command(name="search_registration", description="Search registration (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def search_registration(interaction: discord.Interaction, user: discord.Member):
     """Search user registration"""
     if not utils.has_admin_permissions(interaction.user):
@@ -349,7 +374,6 @@ async def search_registration(interaction: discord.Interaction, user: discord.Me
         await interaction.followup.send(f"❌ {user.mention} not registered.")
 
 @bot.tree.command(name="delete_registration", description="Delete registration (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def delete_registration(interaction: discord.Interaction, user: discord.Member):
     """Delete registration"""
     if not utils.has_admin_permissions(interaction.user):
@@ -376,7 +400,6 @@ async def delete_registration(interaction: discord.Interaction, user: discord.Me
     await interaction.followup.send(embed=embed, view=view)
 
 @bot.tree.command(name="export_registrations", description="Export CSV (Admin only)")
-@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def export_registrations(interaction: discord.Interaction):
     """Export CSV"""
     if not utils.has_admin_permissions(interaction.user):
@@ -410,14 +433,23 @@ async def export_registrations(interaction: discord.Interaction):
 # Error handler
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    # Avoid replying after timeouts or when the command isn't found
+    try:
+        from discord.app_commands import CommandNotFound
+        if isinstance(error, CommandNotFound):
+            print("CommandNotFound for interaction; ignoring.")
+            return
+    except Exception:
+        pass
     print(f"Command error: {error}")
-    if not interaction.response.is_done():
-        await interaction.response.send_message("❌ Command error occurred.", ephemeral=True)
-    else:
-        try:
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.send_message("❌ Command error occurred.", ephemeral=True)
+        else:
             await interaction.followup.send("❌ Command error occurred.", ephemeral=True)
-        except:
-            pass
+    except Exception:
+        # Swallow errors like Unknown interaction (already timed out)
+        pass
 
 # Run bot
 if __name__ == "__main__":

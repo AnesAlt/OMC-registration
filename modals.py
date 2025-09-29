@@ -225,7 +225,7 @@ class ContactInfoModal(discord.ui.Modal):
         )
         
         await interaction.response.send_message(
-            "✅ **Contact information validated!** Please select your team:",
+            "Select your team:",
             view=view,
             ephemeral=True
         )

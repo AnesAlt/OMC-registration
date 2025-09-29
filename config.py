@@ -64,4 +64,4 @@ TEAM_OPTIONS = [
 ]
 
 # Bot settings
-REGISTRATION_TIMEOUT = 300  # 5 minutes timeout for registration views
+REGISTRATION_TIMEOUT = 30  # 30 seconds timeout for registration views

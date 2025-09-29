@@ -97,6 +97,9 @@ class TeamSelectionView(discord.ui.View):
         # Store the team name in database
         self.registration_data['team'] = team_value
         
+        # Acknowledge interaction quickly before doing DB work
+        await interaction.response.defer()
+
         # Save to database
         success = utils.save_registration_to_db(self.registration_data)
         
@@ -108,7 +111,7 @@ class TeamSelectionView(discord.ui.View):
                 f"Team: {team_value}, Name: {self.registration_data['prenom']} {self.registration_data['nom']}"
             )
             
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 content=f"🎉 **Registration Complete!**\n"
                        f"Welcome {self.registration_data['prenom']} {self.registration_data['nom']}!\n"
                        f"Team: {team_value}\n\n"
@@ -116,7 +119,7 @@ class TeamSelectionView(discord.ui.View):
                 view=None
             )
         else:
-            await interaction.response.edit_message(
+            await interaction.edit_original_response(
                 content="❌ **Error:** Failed to save registration. Please try again or contact an administrator.",
                 view=None
             )
