@@ -136,62 +136,92 @@ class DatabaseManager:
     
     def is_user_registered(self, discord_id: str) -> bool:
         """Check if user is registered"""
-        try:
-            self.ensure_connection()
-            with self.connection.cursor() as cursor:
-                cursor.execute("SELECT 1 FROM registrations WHERE discord_id = %s", (discord_id,))
-                return cursor.fetchone() is not None
-        except Exception as e:
-            print(f"❌ Error checking registration: {e}")
-            return False
+        for attempt in range(2):
+            try:
+                self.ensure_connection()
+                with self.connection.cursor() as cursor:
+                    cursor.execute("SELECT 1 FROM registrations WHERE discord_id = %s", (discord_id,))
+                    return cursor.fetchone() is not None
+            except (OperationalError, InterfaceError) as e:
+                print(f"⚠️ Transient DB error on is_user_registered (attempt {attempt+1}): {e}")
+                try:
+                    self.connect()
+                except Exception:
+                    pass
+                if attempt == 1:
+                    return False
+            except Exception as e:
+                print(f"❌ Error checking registration: {e}")
+                return False
     
     def get_user_registration(self, discord_id: str) -> Optional[dict]:
         """Get user registration data"""
-        try:
-            self.ensure_connection()
-            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
-                cursor.execute("SELECT * FROM registrations WHERE discord_id = %s", (discord_id,))
-                return cursor.fetchone()
-        except Exception as e:
-            print(f"❌ Error getting registration: {e}")
-            return None
+        for attempt in range(2):
+            try:
+                self.ensure_connection()
+                with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                    cursor.execute("SELECT * FROM registrations WHERE discord_id = %s", (discord_id,))
+                    return cursor.fetchone()
+            except (OperationalError, InterfaceError) as e:
+                print(f"⚠️ Transient DB error on get_user_registration (attempt {attempt+1}): {e}")
+                try:
+                    self.connect()
+                except Exception:
+                    pass
+                if attempt == 1:
+                    return None
+            except Exception as e:
+                print(f"❌ Error getting registration: {e}")
+                return None
     
     def get_registered_discord_ids(self) -> set:
         """Get all registered Discord IDs"""
-        try:
-            self.ensure_connection()
-            with self.connection.cursor() as cursor:
-                cursor.execute("SELECT discord_id FROM registrations")
-                return {row[0] for row in cursor.fetchall()}
-        except Exception as e:
-            print(f"❌ Error getting registered IDs: {e}")
-            return set()
+        for attempt in range(2):
+            try:
+                self.ensure_connection()
+                with self.connection.cursor() as cursor:
+                    cursor.execute("SELECT discord_id FROM registrations")
+                    return {row[0] for row in cursor.fetchall()}
+            except (OperationalError, InterfaceError) as e:
+                print(f"⚠️ Transient DB error on get_registered_discord_ids (attempt {attempt+1}): {e}")
+                try:
+                    self.connect()
+                except Exception:
+                    pass
+                if attempt == 1:
+                    return set()
+            except Exception as e:
+                print(f"❌ Error getting registered IDs: {e}")
+                return set()
     
     def get_registration_stats(self) -> dict:
         """Get registration statistics"""
-        try:
-            self.ensure_connection()
-            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
-                # Get total count
-                cursor.execute("SELECT COUNT(*) as total FROM registrations")
-                total = cursor.fetchone()['total']
-                
-                # Get team counts
-                cursor.execute("SELECT team, COUNT(*) as count FROM registrations GROUP BY team")
-                teams = {row['team']: row['count'] for row in cursor.fetchall()}
-                
-                # Get latest registration
-                cursor.execute("SELECT * FROM registrations ORDER BY timestamp DESC LIMIT 1")
-                latest = cursor.fetchone()
-                
-                return {
-                    'total': total,
-                    'teams': teams,
-                    'latest': latest
-                }
-        except Exception as e:
-            print(f"❌ Error getting stats: {e}")
-            return {'total': 0, 'teams': {}, 'latest': None}
+        for attempt in range(2):
+            try:
+                self.ensure_connection()
+                with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                    cursor.execute("SELECT COUNT(*) as total FROM registrations")
+                    total = cursor.fetchone()['total']
+                    cursor.execute("SELECT team, COUNT(*) as count FROM registrations GROUP BY team")
+                    teams = {row['team']: row['count'] for row in cursor.fetchall()}
+                    cursor.execute("SELECT * FROM registrations ORDER BY timestamp DESC LIMIT 1")
+                    latest = cursor.fetchone()
+                    return {
+                        'total': total,
+                        'teams': teams,
+                        'latest': latest
+                    }
+            except (OperationalError, InterfaceError) as e:
+                print(f"⚠️ Transient DB error on get_registration_stats (attempt {attempt+1}): {e}")
+                try:
+                    self.connect()
+                except Exception:
+                    pass
+                if attempt == 1:
+                    return {'total': 0, 'teams': {}, 'latest': None}
+            except Exception as e:
+                print(f"❌ Error getting stats: {e}")
+                return {'total': 0, 'teams': {}, 'latest': None}
     
     def remove_user_registration(self, discord_id: str) -> bool:
         """Remove user registration"""
@@ -278,52 +308,72 @@ class DatabaseManager:
     
     def export_to_csv(self, filepath: str) -> bool:
         """Export all registrations to CSV"""
-        try:
-            self.ensure_connection()
-            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
-                cursor.execute("""
-                    SELECT last_name, first_name, photo, year_major, student_id, 
-                           phone, email, discord_id, team, timestamp 
-                    FROM registrations 
-                    ORDER BY timestamp DESC
-                """)
-                
-                registrations = cursor.fetchall()
-                
-                if not registrations:
+        for attempt in range(2):
+            try:
+                self.ensure_connection()
+                with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                    cursor.execute("""
+                        SELECT last_name, first_name, photo, year_major, student_id, 
+                               phone, email, discord_id, team, timestamp 
+                        FROM registrations 
+                        ORDER BY timestamp DESC
+                    """)
+                    registrations = cursor.fetchall()
+                    if not registrations:
+                        return False
+                    with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+                        fieldnames = ['last_name', 'first_name', 'photo', 'year_major', 'student_id', 
+                                    'phone', 'email', 'discord_id', 'team', 'timestamp']
+                        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                        writer.writeheader()
+                        for row in registrations:
+                            if row['timestamp']:
+                                row['timestamp'] = row['timestamp'].isoformat()
+                            writer.writerow(row)
+                    return True
+            except (OperationalError, InterfaceError) as e:
+                print(f"⚠️ Transient DB error on export_to_csv (attempt {attempt+1}): {e}")
+                try:
+                    self.connect()
+                except Exception:
+                    pass
+                if attempt == 1:
                     return False
-                
-                # Write to CSV
-                with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
-                    fieldnames = ['last_name', 'first_name', 'photo', 'year_major', 'student_id', 
-                                'phone', 'email', 'discord_id', 'team', 'timestamp']
-                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                    writer.writeheader()
-                    
-                    for row in registrations:
-                        # Convert datetime to string for CSV
-                        if row['timestamp']:
-                            row['timestamp'] = row['timestamp'].isoformat()
-                        writer.writerow(row)
-                
-                return True
-        except Exception as e:
-            print(f"❌ Error exporting to CSV: {e}")
-            return False
+            except Exception as e:
+                print(f"❌ Error exporting to CSV: {e}")
+                return False
     
     def log_admin_action(self, action: str, admin_user, details: str = ""):
         """Log admin actions to database"""
-        try:
-            self.ensure_connection()
-            with self.connection.cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO admin_logs (action, admin_discord_id, admin_name, details)
-                    VALUES (%s, %s, %s, %s)
-                """, (action, str(admin_user.id), str(admin_user), details))
-            self.connection.commit()
-        except Exception as e:
-            print(f"❌ Error logging action: {e}")
-            self.connection.rollback()
+        for attempt in range(2):
+            try:
+                self.ensure_connection()
+                with self.connection.cursor() as cursor:
+                    cursor.execute("""
+                        INSERT INTO admin_logs (action, admin_discord_id, admin_name, details)
+                        VALUES (%s, %s, %s, %s)
+                    """, (action, str(admin_user.id), str(admin_user), details))
+                self.connection.commit()
+                return
+            except (OperationalError, InterfaceError) as e:
+                print(f"⚠️ Transient DB error on log_admin_action (attempt {attempt+1}): {e}")
+                try:
+                    self.connect()
+                except Exception:
+                    pass
+                if attempt == 1:
+                    try:
+                        self.connection.rollback()
+                    except Exception:
+                        pass
+                    return
+            except Exception as e:
+                print(f"❌ Error logging action: {e}")
+                try:
+                    self.connection.rollback()
+                except Exception:
+                    pass
+                return
     
     def get_all_registrations(self) -> List[dict]:
         """Get all registration data"""
