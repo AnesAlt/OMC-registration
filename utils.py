@@ -122,9 +122,12 @@ def get_unregistered_members_with_teams(guild: discord.Guild) -> Tuple[List[disc
     Returns: (members_with_teams, members_without_teams)
     """
     registered_ids = get_registered_discord_ids()
+    print(f"DEBUG: Found {len(registered_ids)} registered Discord IDs")
     
     members_with_teams = []
     members_without_teams = []
+    
+    print(f"DEBUG: Checking {len(guild.members)} guild members")
     
     for member in guild.members:
         if str(member.id) not in registered_ids:
@@ -138,6 +141,7 @@ def get_unregistered_members_with_teams(guild: discord.Guild) -> Tuple[List[disc
                 else:
                     members_without_teams.append(member)
     
+    print(f"DEBUG: Members with teams: {len(members_with_teams)}, without teams: {len(members_without_teams)}")
     return members_with_teams, members_without_teams
 
 def get_unregistered_members(guild: discord.Guild) -> List[discord.Member]:

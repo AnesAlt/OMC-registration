@@ -1,17 +1,15 @@
-# main.py - Club Registration Bot with keep-alive for Render
+# main.py - Club Registration Bot (MySQL version)
 
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord import app_commands
 import config
 import utils
 from views import RegistrationView, ConfirmationView, DeleteConfirmationView
 import os
-import asyncio
-from datetime import datetime
 
 # Your server ID
-GUILD_ID = 659857443299393547
+GUILD_ID = 1402970512229142558
 
 # Create bot instance
 intents = discord.Intents.default()
@@ -24,11 +22,6 @@ bot = commands.Bot(
     intents=intents,
     help_command=None
 )
-
-@tasks.loop(minutes=10)
-async def keep_alive():
-    """Prevent Render from spinning down by logging activity every 10 minutes"""
-    print(f"[{datetime.now()}] Keep-alive ping - Bot is active")
 
 @bot.event
 async def on_ready():
@@ -45,13 +38,6 @@ async def on_ready():
         print(f"❌ Database initialization failed: {e}")
         return
     
-    # Chunk all guild members to ensure we see everyone
-    for guild in bot.guilds:
-        print(f"Guild: {guild.name} - {guild.member_count} members")
-        print("Fetching all members...")
-        await guild.chunk()
-        print(f"✅ Members visible after chunk: {len(guild.members)}")
-    
     # Add persistent view
     bot.add_view(RegistrationView())
     print("Persistent views loaded!")
@@ -63,14 +49,11 @@ async def on_ready():
         print(f"✅ Successfully synced {len(synced)} commands!")
     except Exception as e:
         print(f"❌ Sync error: {e}")
-    
-    # Start keep-alive task
-    if not keep_alive.is_running():
-        keep_alive.start()
-        print("✅ Keep-alive task started")
+
 
 # Basic Commands
 @bot.tree.command(name="setup_registration", description="Setup registration panel (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def setup_registration(interaction: discord.Interaction, channel: discord.TextChannel = None):
     """Setup registration panel"""
     if not utils.has_admin_permissions(interaction.user):
@@ -91,6 +74,7 @@ async def setup_registration(interaction: discord.Interaction, channel: discord.
         await interaction.response.send_message(f"❌ No permission in {channel.mention}!", ephemeral=True)
 
 @bot.tree.command(name="registration_stats", description="View registration statistics (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def registration_stats(interaction: discord.Interaction):
     """Show stats"""
     if not utils.has_admin_permissions(interaction.user):
@@ -109,6 +93,7 @@ async def registration_stats(interaction: discord.Interaction):
 
 # Registration Management Commands
 @bot.tree.command(name="check_registration_status", description="Check registration status by member type (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def check_registration_status(interaction: discord.Interaction):
     """Show detailed registration status"""
     if not utils.has_admin_permissions(interaction.user):
@@ -117,9 +102,11 @@ async def check_registration_status(interaction: discord.Interaction):
     
     await interaction.response.defer(ephemeral=True)
     
-    # Ensure guild is chunked before checking members
-    if not interaction.guild.chunked:
+    # Fetch all members
+    try:
         await interaction.guild.chunk()
+    except Exception as e:
+        print(f"Warning: Could not chunk guild members: {e}")
     
     members_with_teams, members_without_teams = utils.get_unregistered_members_with_teams(interaction.guild)
     
@@ -143,6 +130,7 @@ async def check_registration_status(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="assign_not_renewed", description="Assign 'not renewed' role to existing team members who didn't register (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def assign_not_renewed(interaction: discord.Interaction):
     """Assign not renewed role to existing team members"""
     if not utils.has_admin_permissions(interaction.user):
@@ -151,9 +139,11 @@ async def assign_not_renewed(interaction: discord.Interaction):
     
     await interaction.response.defer(ephemeral=True)
     
-    # Ensure guild is chunked
-    if not interaction.guild.chunked:
+    # Fetch all members
+    try:
         await interaction.guild.chunk()
+    except Exception as e:
+        print(f"Warning: Could not chunk guild members: {e}")
     
     # Get not renewed role
     not_renewed_role = interaction.guild.get_role(config.NOT_RENEWED_ROLE_ID)
@@ -179,7 +169,6 @@ async def assign_not_renewed(interaction: discord.Interaction):
             else:
                 await member.add_roles(not_renewed_role, reason="Existing team member who didn't renew")
                 processed += 1
-                await asyncio.sleep(0.5)
         except Exception as e:
             print(f"Error assigning not renewed role to {member}: {e}")
             errors += 1
@@ -194,6 +183,7 @@ async def assign_not_renewed(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="assign_unverified", description="Assign unverified role to new members (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def assign_unverified(interaction: discord.Interaction):
     """Assign unverified role to new members"""
     if not utils.has_admin_permissions(interaction.user):
@@ -202,9 +192,11 @@ async def assign_unverified(interaction: discord.Interaction):
     
     await interaction.response.defer(ephemeral=True)
     
-    # Ensure guild is chunked
-    if not interaction.guild.chunked:
+    # Fetch all members
+    try:
         await interaction.guild.chunk()
+    except Exception as e:
+        print(f"Warning: Could not chunk guild members: {e}")
     
     unverified_role = interaction.guild.get_role(config.UNVERIFIED_ROLE_ID)
     if not unverified_role:
@@ -229,7 +221,6 @@ async def assign_unverified(interaction: discord.Interaction):
             else:
                 await member.add_roles(unverified_role, reason="Unregistered new member")
                 processed += 1
-                await asyncio.sleep(0.5)
         except Exception as e:
             print(f"Error with {member}: {e}")
             errors += 1
@@ -244,6 +235,17 @@ async def assign_unverified(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 @bot.tree.command(name="kick_new_members", description="Kick unregistered new members (without existing team roles) (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
+async def kick_new_members(interaction: discord.Interaction):
+    """Kick only new members without existing team roles"""
+    if not utils.has_admin_permissions(interaction.user):
+        await interaction.response.send_message("❌ No permission!", ephemeral=True)
+        return
+    
+    await interaction.response.defer
+
+@bot.tree.command(name="kick_new_members", description="Kick unregistered new members (without existing team roles) (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def kick_new_members(interaction: discord.Interaction):
     """Kick only new members without existing team roles"""
     if not utils.has_admin_permissions(interaction.user):
@@ -252,38 +254,86 @@ async def kick_new_members(interaction: discord.Interaction):
     
     await interaction.response.defer(ephemeral=True)
     
-    # Ensure guild is chunked
-    if not interaction.guild.chunked:
+    # Check bot permissions
+    bot_member = interaction.guild.get_member(bot.user.id)
+    if not bot_member or not bot_member.guild_permissions.kick_members:
+        await interaction.followup.send("❌ Bot doesn't have kick permissions!", ephemeral=True)
+        return
+    
+    # Ensure member cache is populated
+    try:
         await interaction.guild.chunk()
+    except Exception as e:
+        print(f"Warning: Could not chunk guild members: {e}")
     
     # Get new members who should be kicked
     _, members_without_teams = utils.get_unregistered_members_with_teams(interaction.guild)
     
-    if not members_without_teams:
-        await interaction.followup.send("✅ All new members have registered!")
+    # Filter out bots and members we can't kick
+    kickable_members = []
+    skipped_members = []
+    
+    for member in members_without_teams:
+        # Skip bots
+        if member.bot:
+            continue
+        # Skip if member has higher role than bot
+        if member.top_role >= bot_member.top_role:
+            skipped_members.append(f"{member.display_name} (higher role)")
+            continue
+        # Skip administrators
+        if member.guild_permissions.administrator:
+            skipped_members.append(f"{member.display_name} (admin)")
+            continue
+        kickable_members.append(member)
+    
+    if not kickable_members:
+        msg = "✅ All new members have registered!"
+        if skipped_members:
+            msg += f"\n\n**Note:** {len(skipped_members)} members were skipped (bots/admins/higher roles)"
+        await interaction.followup.send(msg)
         return
     
+    # Create confirmation embed with better info
     embed = discord.Embed(
         title="⚠️ Kick New Members Confirmation",
-        description=f"Kick **{len(members_without_teams)}** unregistered new members who DON'T have existing team roles?\n\n"
-                   f"**Note:** Members with existing team roles will NOT be kicked.\n**Cannot be undone!**",
+        description=f"About to kick **{len(kickable_members)}** unregistered new members.\n\n"
+                   f"**Criteria:**\n"
+                   f"• Not registered in database\n"
+                   f"• No existing team roles\n"
+                   f"• Not bots or admins\n\n"
+                   f"**⚠️ This action cannot be undone!**",
         color=discord.Color.red()
     )
     
+    # Show preview
     preview = []
-    for i, member in enumerate(members_without_teams[:5], 1):
-        preview.append(f"{i}. {member.display_name}")
+    for i, member in enumerate(kickable_members[:10], 1):
+        roles = [r.name for r in member.roles if r.name != "@everyone"]
+        role_text = f" ({', '.join(roles[:3])})" if roles else " (no roles)"
+        preview.append(f"{i}. {member.mention} - {member.name}{role_text}")
     
-    embed.add_field(name="Preview (New Members Only)", 
-                   value="\n".join(preview) + 
-                   (f"\n... and {len(members_without_teams) - 5} more" if len(members_without_teams) > 5 else ""), 
-                   inline=False)
+    embed.add_field(
+        name=f"Preview (showing {min(10, len(kickable_members))} of {len(kickable_members)})",
+        value="\n".join(preview) + 
+              (f"\n... and {len(kickable_members) - 10} more" if len(kickable_members) > 10 else ""),
+        inline=False
+    )
     
-    view = ConfirmationView(members_without_teams)
+    if skipped_members:
+        embed.add_field(
+            name=f"⚠️ Skipped ({len(skipped_members)})",
+            value="\n".join(skipped_members[:5]) + 
+                  (f"\n... and {len(skipped_members) - 5} more" if len(skipped_members) > 5 else ""),
+            inline=False
+        )
+    
+    view = ConfirmationView(kickable_members)
     await interaction.followup.send(embed=embed, view=view)
 
 # Individual Management Commands
 @bot.tree.command(name="search_registration", description="Search registration (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def search_registration(interaction: discord.Interaction, user: discord.Member):
     """Search user registration"""
     if not utils.has_admin_permissions(interaction.user):
@@ -299,11 +349,14 @@ async def search_registration(interaction: discord.Interaction, user: discord.Me
         embed.add_field(name="Team", value=registration['team'], inline=True)
         embed.add_field(name="Email", value=registration['email'], inline=False)
         embed.add_field(name="Phone", value=registration['phone'], inline=False)
+        embed.add_field(name="Student ID", value=registration['student_id'], inline=True)
+        embed.add_field(name="Year/Major", value=registration['year_major'], inline=True)
         await interaction.followup.send(embed=embed)
     else:
         await interaction.followup.send(f"❌ {user.mention} not registered.")
 
 @bot.tree.command(name="delete_registration", description="Delete registration (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def delete_registration(interaction: discord.Interaction, user: discord.Member):
     """Delete registration"""
     if not utils.has_admin_permissions(interaction.user):
@@ -330,6 +383,7 @@ async def delete_registration(interaction: discord.Interaction, user: discord.Me
     await interaction.followup.send(embed=embed, view=view)
 
 @bot.tree.command(name="export_registrations", description="Export CSV (Admin only)")
+@app_commands.guilds(discord.Object(id=GUILD_ID))
 async def export_registrations(interaction: discord.Interaction):
     """Export CSV"""
     if not utils.has_admin_permissions(interaction.user):
@@ -366,14 +420,13 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     print(f"Command error: {error}")
     if not interaction.response.is_done():
         await interaction.response.send_message("❌ Command error occurred.", ephemeral=True)
+    else:
+        try:
+            await interaction.followup.send("❌ Command error occurred.", ephemeral=True)
+        except:
+            pass
 
 # Run bot
 if __name__ == "__main__":
     print("Starting Club Registration Bot...")
-    print(f"TOKEN loaded? {bool(config.BOT_TOKEN)}")
-    if config.BOT_TOKEN:
-        print(f"First 10 chars of token: {config.BOT_TOKEN[:10]}...")
-    else:
-        raise RuntimeError("BOT_TOKEN is missing! Check Render variables.")
     bot.run(config.BOT_TOKEN)
-

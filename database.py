@@ -60,7 +60,7 @@ class DatabaseManager:
                         INDEX idx_timestamp (timestamp)
                     )
                 """)
-                
+            self.connection.commit()
             print("✅ Database tables created/verified")
         except Exception as e:
             print(f"❌ Error creating tables: {e}")
@@ -87,9 +87,11 @@ class DatabaseManager:
                     registration_data['team'],
                     datetime.fromisoformat(registration_data['timestamp'])
                 ))
+            self.connection.commit()
             return True
         except Exception as e:
             print(f"❌ Error saving registration: {e}")
+            self.connection.rollback()
             return False
     
     def is_user_registered(self, discord_id: str) -> bool:
@@ -152,9 +154,12 @@ class DatabaseManager:
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute("DELETE FROM registrations WHERE discord_id = %s", (discord_id,))
-                return cursor.rowcount > 0
+                rowcount = cursor.rowcount
+            self.connection.commit()
+            return rowcount > 0
         except Exception as e:
             print(f"❌ Error removing registration: {e}")
+            self.connection.rollback()
             return False
     
     def modify_user_registration(self, discord_id: str, field: str, new_value: str) -> Tuple[bool, str]:
@@ -180,14 +185,18 @@ class DatabaseManager:
             with self.connection.cursor() as cursor:
                 cursor.execute(f"UPDATE registrations SET {db_field} = %s WHERE discord_id = %s", 
                              (new_value, discord_id))
-                
-                if cursor.rowcount > 0:
-                    return True, "Registration updated successfully"
-                else:
-                    return False, "User not found in registration database"
+                rowcount = cursor.rowcount
+            
+            self.connection.commit()
+            
+            if rowcount > 0:
+                return True, "Registration updated successfully"
+            else:
+                return False, "User not found in registration database"
                     
         except Exception as e:
             print(f"❌ Error modifying registration: {e}")
+            self.connection.rollback()
             return False, f"Error updating registration: {str(e)}"
     
     def export_to_csv(self, filepath: str) -> bool:
@@ -232,8 +241,10 @@ class DatabaseManager:
                     INSERT INTO admin_logs (action, admin_discord_id, admin_name, details)
                     VALUES (%s, %s, %s, %s)
                 """, (action, str(admin_user.id), str(admin_user), details))
+            self.connection.commit()
         except Exception as e:
             print(f"❌ Error logging action: {e}")
+            self.connection.rollback()
     
     def get_all_registrations(self) -> List[dict]:
         """Get all registration data"""

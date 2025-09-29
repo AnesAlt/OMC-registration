@@ -1,4 +1,4 @@
-# modals.py - Discord UI Modals (same as before, just one small update)
+# modals.py - Discord UI Modals
 
 import discord
 import utils
@@ -83,7 +83,7 @@ class RegistrationModal(discord.ui.Modal):
         if not self.annee_specialite.value.strip():
             errors.append("Year + Field of Study cannot be empty")
         
-        # Validate photo URL (removed URL format validation)
+        # Validate photo URL
         if not self.photo.value.strip():
             errors.append("Photo URL cannot be empty")
         
