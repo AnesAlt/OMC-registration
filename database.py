@@ -37,15 +37,14 @@ class DatabaseManager:
     def ensure_connection(self):
         """Ensure the MySQL connection is alive; reconnect if needed."""
         try:
-            # Only ping periodically to avoid unnecessary calls
             if self.connection is None:
                 self.connect()
             else:
-                if time.time() - self.last_ping > 300:
-                    self.connection.ping(reconnect=True)
-                    self.last_ping = time.time()
+                # ALWAYS ping before queries, not just after 5 minutes
+                # ping() is fast if connection is alive
+                self.connection.ping(reconnect=True)
+                self.last_ping = time.time()
         except (OperationalError, InterfaceError, AttributeError):
-            # Try a full reconnect
             self.connect()
     
     def create_tables(self):
