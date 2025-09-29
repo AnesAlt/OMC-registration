@@ -1,12 +1,14 @@
-# main.py - Club Registration Bot (MySQL version)
+# main.py - Club Registration Bot with keep-alive for Render
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import config
 import utils
 from views import RegistrationView, ConfirmationView, DeleteConfirmationView
 import os
+import asyncio
+from datetime import datetime
 
 # Your server ID
 GUILD_ID = 1402970512229142558
@@ -15,12 +17,18 @@ GUILD_ID = 1402970512229142558
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
+intents.guilds = True
 
 bot = commands.Bot(
     command_prefix='!',
     intents=intents,
     help_command=None
 )
+
+@tasks.loop(minutes=10)
+async def keep_alive():
+    """Prevent Render from spinning down by logging activity every 10 minutes"""
+    print(f"[{datetime.now()}] Keep-alive ping - Bot is active")
 
 @bot.event
 async def on_ready():
@@ -37,6 +45,13 @@ async def on_ready():
         print(f"❌ Database initialization failed: {e}")
         return
     
+    # Chunk all guild members to ensure we see everyone
+    for guild in bot.guilds:
+        print(f"Guild: {guild.name} - {guild.member_count} members")
+        print("Fetching all members...")
+        await guild.chunk()
+        print(f"✅ Members visible after chunk: {len(guild.members)}")
+    
     # Add persistent view
     bot.add_view(RegistrationView())
     print("Persistent views loaded!")
@@ -48,7 +63,11 @@ async def on_ready():
         print(f"✅ Successfully synced {len(synced)} commands!")
     except Exception as e:
         print(f"❌ Sync error: {e}")
-
+    
+    # Start keep-alive task
+    if not keep_alive.is_running():
+        keep_alive.start()
+        print("✅ Keep-alive task started")
 
 # Basic Commands
 @bot.tree.command(name="setup_registration", description="Setup registration panel (Admin only)")
@@ -98,6 +117,10 @@ async def check_registration_status(interaction: discord.Interaction):
     
     await interaction.response.defer(ephemeral=True)
     
+    # Ensure guild is chunked before checking members
+    if not interaction.guild.chunked:
+        await interaction.guild.chunk()
+    
     members_with_teams, members_without_teams = utils.get_unregistered_members_with_teams(interaction.guild)
     
     embed = discord.Embed(title="📊 Registration Status by Member Type", color=discord.Color.blue())
@@ -128,6 +151,10 @@ async def assign_not_renewed(interaction: discord.Interaction):
     
     await interaction.response.defer(ephemeral=True)
     
+    # Ensure guild is chunked
+    if not interaction.guild.chunked:
+        await interaction.guild.chunk()
+    
     # Get not renewed role
     not_renewed_role = interaction.guild.get_role(config.NOT_RENEWED_ROLE_ID)
     if not not_renewed_role:
@@ -152,6 +179,7 @@ async def assign_not_renewed(interaction: discord.Interaction):
             else:
                 await member.add_roles(not_renewed_role, reason="Existing team member who didn't renew")
                 processed += 1
+                await asyncio.sleep(0.5)
         except Exception as e:
             print(f"Error assigning not renewed role to {member}: {e}")
             errors += 1
@@ -173,6 +201,10 @@ async def assign_unverified(interaction: discord.Interaction):
         return
     
     await interaction.response.defer(ephemeral=True)
+    
+    # Ensure guild is chunked
+    if not interaction.guild.chunked:
+        await interaction.guild.chunk()
     
     unverified_role = interaction.guild.get_role(config.UNVERIFIED_ROLE_ID)
     if not unverified_role:
@@ -197,6 +229,7 @@ async def assign_unverified(interaction: discord.Interaction):
             else:
                 await member.add_roles(unverified_role, reason="Unregistered new member")
                 processed += 1
+                await asyncio.sleep(0.5)
         except Exception as e:
             print(f"Error with {member}: {e}")
             errors += 1
@@ -218,6 +251,10 @@ async def kick_new_members(interaction: discord.Interaction):
         return
     
     await interaction.response.defer(ephemeral=True)
+    
+    # Ensure guild is chunked
+    if not interaction.guild.chunked:
+        await interaction.guild.chunk()
     
     # Get new members who should be kicked
     _, members_without_teams = utils.get_unregistered_members_with_teams(interaction.guild)
@@ -333,4 +370,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 # Run bot
 if __name__ == "__main__":
     print("Starting Club Registration Bot...")
+    print(f"TOKEN loaded? {bool(config.BOT_TOKEN)}")
+    if config.BOT_TOKEN:
+        print(f"First 10 chars of token: {config.BOT_TOKEN[:10]}...")
+    else:
+        raise RuntimeError("BOT_TOKEN is missing! Check Render variables.")
     bot.run(config.BOT_TOKEN)
