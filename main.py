@@ -45,20 +45,30 @@ async def db_keepalive():
 
 @bot.tree.command(name="ping_bot", description="Basic ping to verify bot is responsive")
 async def ping_bot(interaction: discord.Interaction):
+    import time
     try:
+        start = time.time()
         await interaction.response.send_message("🏓 Pong!", ephemeral=True)
+        elapsed = time.time() - start
+        print(f"⏱️ ping_bot response took {elapsed:.3f} seconds")
     except Exception as e:
         print(f"Error in ping_bot: {e}")
 
 @bot.tree.command(name="db_ping", description="Check database connectivity")
 async def db_ping(interaction: discord.Interaction):
+    import time
     try:
+        start = time.time()
         await interaction.response.defer(ephemeral=True)
+        defer_time = time.time() - start
+        print(f"⏱️ db_ping defer took {defer_time:.3f} seconds")
+        
         db = get_db()
         db.ensure_connection()
         await interaction.followup.send("✅ DB connection OK")
     except discord.errors.NotFound:
-        print("db_ping: Interaction expired")
+        elapsed = time.time() - start
+        print(f"❌ db_ping: Interaction expired after {elapsed:.3f} seconds")
     except Exception as e:
         print(f"DB ping failed: {e}")
 
@@ -122,9 +132,13 @@ async def setup_registration(interaction: discord.Interaction, channel: discord.
 @bot.tree.command(name="registration_stats", description="View registration statistics (Admin only)")
 async def registration_stats(interaction: discord.Interaction):
     """Show stats"""
+    import time
     try:
+        start = time.time()
         # DEFER IMMEDIATELY
         await interaction.response.defer(ephemeral=True)
+        defer_time = time.time() - start
+        print(f"⏱️ registration_stats defer took {defer_time:.3f} seconds")
         
         if not utils.has_admin_permissions(interaction.user):
             await interaction.followup.send("❌ No permission!")
@@ -139,8 +153,11 @@ async def registration_stats(interaction: discord.Interaction):
             embed.add_field(name="Teams", value=teams_text, inline=False)
         
         await interaction.followup.send(embed=embed)
+        total_time = time.time() - start
+        print(f"⏱️ registration_stats completed in {total_time:.3f} seconds")
     except discord.errors.NotFound:
-        print("registration_stats: Interaction expired")
+        elapsed = time.time() - start
+        print(f"❌ registration_stats: Interaction expired after {elapsed:.3f} seconds")
     except Exception as e:
         print(f"Error in registration_stats: {e}")
 
