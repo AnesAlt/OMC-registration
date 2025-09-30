@@ -13,24 +13,16 @@ import sys
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
-
 print("=" * 50)
 print("ENVIRONMENT VARIABLES CHECK")
 print(f"BOT_TOKEN: {'SET' if os.getenv('BOT_TOKEN') else 'MISSING'}")
 print(f"MYSQL_PUBLIC_URL: {os.getenv('MYSQL_PUBLIC_URL', 'NOT SET')}")
-print(f"MYSQL_URL: {os.getenv('MYSQL_URL', 'NOT SET')}")
-print(f"MYSQLHOST: {os.getenv('MYSQLHOST', 'NOT SET')}")
-print(f"MYSQLUSER: {os.getenv('MYSQLUSER', 'NOT SET')}")
-print(f"MYSQLDATABASE: {os.getenv('MYSQLDATABASE', 'NOT SET')}")
 print("=" * 50)
 
-# Import and start health check server
 from keep_alive import keep_alive
 
-# Your server ID
 GUILD_ID = 659857443299393547
 
-# Create bot instance
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -42,7 +34,6 @@ bot = commands.Bot(
     help_command=None
 )
 
-# IMPORTANT: Define tasks BEFORE they're used
 @tasks.loop(seconds=120)
 async def db_keepalive():
     """Periodic task to keep DB connection alive and reconnect if needed"""
@@ -65,13 +56,11 @@ async def db_ping(interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         db = get_db()
         db.ensure_connection()
-        await interaction.edit_original_response(content="✅ DB connection OK")
+        await interaction.followup.send("✅ DB connection OK")
+    except discord.errors.NotFound:
+        print("db_ping: Interaction expired")
     except Exception as e:
         print(f"DB ping failed: {e}")
-        try:
-            await interaction.edit_original_response(content=f"❌ DB connection failed: {str(e)}")
-        except:
-            pass
 
 @bot.event
 async def on_ready():
@@ -96,14 +85,6 @@ async def on_ready():
             print("✅ DB keepalive task started")
     except Exception as e:
         print(f"⚠️ Could not start DB keepalive task: {e}")
-    
-    # COMMENT OUT GUILD SYNC - Use global only
-    # try:
-    #     guild = discord.Object(id=GUILD_ID)
-    #     guild_synced = await bot.tree.sync(guild=guild)
-    #     print(f"✅ Guild sync complete: {len(guild_synced)} commands")
-    # except Exception as e:
-    #     print(f"⚠️ Guild sync error: {e}")
 
     try:
         global_synced = await bot.tree.sync()
@@ -111,17 +92,16 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Global sync error: {e}")
 
-
-# Basic Commands
 @bot.tree.command(name="setup_registration", description="Setup registration panel (Admin only)")
 async def setup_registration(interaction: discord.Interaction, channel: discord.TextChannel = None):
     """Setup registration panel"""
     try:
-        if not utils.has_admin_permissions(interaction.user):
-            await interaction.response.send_message("❌ No permission!", ephemeral=True)
-            return
-        
+        # DEFER IMMEDIATELY
         await interaction.response.defer(ephemeral=True)
+        
+        if not utils.has_admin_permissions(interaction.user):
+            await interaction.followup.send("❌ No permission!")
+            return
 
         if channel is None:
             channel = interaction.channel
@@ -130,23 +110,25 @@ async def setup_registration(interaction: discord.Interaction, channel: discord.
         view = RegistrationView()
         
         await channel.send(embed=embed, view=view)
-        await interaction.followup.send(f"✅ Panel setup in {channel.mention}!", ephemeral=True)
+        await interaction.followup.send(f"✅ Panel setup in {channel.mention}!")
         utils.log_action("SETUP_REGISTRATION", interaction.user, f"Channel: {channel.name}")
     except discord.Forbidden:
-        await interaction.followup.send(f"❌ No permission in {channel.mention}!", ephemeral=True)
+        await interaction.followup.send(f"❌ No permission in {channel.mention}!")
+    except discord.errors.NotFound:
+        print("setup_registration: Interaction expired")
     except Exception as e:
         print(f"Error in setup_registration: {e}")
-        await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="registration_stats", description="View registration statistics (Admin only)")
 async def registration_stats(interaction: discord.Interaction):
     """Show stats"""
     try:
-        if not utils.has_admin_permissions(interaction.user):
-            await interaction.response.send_message("❌ No permission!", ephemeral=True)
-            return
-        
+        # DEFER IMMEDIATELY
         await interaction.response.defer(ephemeral=True)
+        
+        if not utils.has_admin_permissions(interaction.user):
+            await interaction.followup.send("❌ No permission!")
+            return
 
         stats = await asyncio.to_thread(utils.get_registration_stats)
         embed = discord.Embed(title="📊 Registration Statistics", color=discord.Color.green())
@@ -157,19 +139,21 @@ async def registration_stats(interaction: discord.Interaction):
             embed.add_field(name="Teams", value=teams_text, inline=False)
         
         await interaction.followup.send(embed=embed)
+    except discord.errors.NotFound:
+        print("registration_stats: Interaction expired")
     except Exception as e:
         print(f"Error in registration_stats: {e}")
-        await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="check_registration_status", description="Check registration status by member type (Admin only)")
 async def check_registration_status(interaction: discord.Interaction):
     """Show detailed registration status"""
     try:
-        if not utils.has_admin_permissions(interaction.user):
-            await interaction.response.send_message("❌ No permission!", ephemeral=True)
-            return
-        
+        # DEFER IMMEDIATELY
         await interaction.response.defer(ephemeral=True)
+        
+        if not utils.has_admin_permissions(interaction.user):
+            await interaction.followup.send("❌ No permission!")
+            return
         
         try:
             await interaction.guild.chunk()
@@ -208,19 +192,21 @@ async def check_registration_status(interaction: discord.Interaction):
             embed.add_field(name="Status", value="✅ All eligible members have registered!", inline=False)
         
         await interaction.followup.send(embed=embed)
+    except discord.errors.NotFound:
+        print("check_registration_status: Interaction expired")
     except Exception as e:
         print(f"Error in check_registration_status: {e}")
-        await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="assign_not_renewed", description="Assign 'not renewed' role to existing team members who didn't register (Admin only)")
 async def assign_not_renewed(interaction: discord.Interaction):
     """Assign not renewed role to existing team members"""
     try:
-        if not utils.has_admin_permissions(interaction.user):
-            await interaction.response.send_message("❌ No permission!", ephemeral=True)
-            return
-        
+        # DEFER IMMEDIATELY
         await interaction.response.defer(ephemeral=True)
+        
+        if not utils.has_admin_permissions(interaction.user):
+            await interaction.followup.send("❌ No permission!")
+            return
         
         try:
             await interaction.guild.chunk()
@@ -269,19 +255,21 @@ async def assign_not_renewed(interaction: discord.Interaction):
         embed.add_field(name="Errors", value=str(errors), inline=True)
         
         await interaction.followup.send(embed=embed)
+    except discord.errors.NotFound:
+        print("assign_not_renewed: Interaction expired")
     except Exception as e:
         print(f"Error in assign_not_renewed: {e}")
-        await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="assign_unverified", description="Assign unverified role to new members (Admin only)")
 async def assign_unverified(interaction: discord.Interaction):
     """Assign unverified role to new members"""
     try:
-        if not utils.has_admin_permissions(interaction.user):
-            await interaction.response.send_message("❌ No permission!", ephemeral=True)
-            return
-        
+        # DEFER IMMEDIATELY
         await interaction.response.defer(ephemeral=True)
+        
+        if not utils.has_admin_permissions(interaction.user):
+            await interaction.followup.send("❌ No permission!")
+            return
         
         try:
             await interaction.guild.chunk()
@@ -331,23 +319,25 @@ async def assign_unverified(interaction: discord.Interaction):
         embed.add_field(name="Errors", value=str(errors), inline=True)
         
         await interaction.followup.send(embed=embed)
+    except discord.errors.NotFound:
+        print("assign_unverified: Interaction expired")
     except Exception as e:
         print(f"Error in assign_unverified: {e}")
-        await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="kick_new_members", description="Kick unregistered new members (without existing team roles) (Admin only)")
 async def kick_new_members(interaction: discord.Interaction):
     """Kick only new members without existing team roles"""
     try:
-        if not utils.has_admin_permissions(interaction.user):
-            await interaction.response.send_message("❌ No permission!", ephemeral=True)
-            return
-        
+        # DEFER IMMEDIATELY
         await interaction.response.defer(ephemeral=True)
+        
+        if not utils.has_admin_permissions(interaction.user):
+            await interaction.followup.send("❌ No permission!")
+            return
         
         bot_member = interaction.guild.get_member(bot.user.id)
         if not bot_member or not bot_member.guild_permissions.kick_members:
-            await interaction.followup.send("❌ Bot doesn't have kick permissions!", ephemeral=True)
+            await interaction.followup.send("❌ Bot doesn't have kick permissions!")
             return
         
         try:
@@ -421,19 +411,22 @@ async def kick_new_members(interaction: discord.Interaction):
         
         view = ConfirmationView(kickable_members)
         await interaction.followup.send(embed=embed, view=view)
+    except discord.errors.NotFound:
+        print("kick_new_members: Interaction expired")
     except Exception as e:
         print(f"Error in kick_new_members: {e}")
-        await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="search_registration", description="Search registration (Admin only)")
 async def search_registration(interaction: discord.Interaction, user: discord.Member):
     """Search user registration"""
     try:
+        # DEFER IMMEDIATELY
+        await interaction.response.defer(ephemeral=True)
+        
         if not utils.has_admin_permissions(interaction.user):
-            await interaction.response.send_message("❌ No permission!", ephemeral=True)
+            await interaction.followup.send("❌ No permission!")
             return
         
-        await interaction.response.defer(ephemeral=True)
         registration = await asyncio.to_thread(utils.get_user_registration, str(user.id))
         
         if registration:
@@ -447,19 +440,21 @@ async def search_registration(interaction: discord.Interaction, user: discord.Me
             await interaction.followup.send(embed=embed)
         else:
             await interaction.followup.send(f"❌ {user.mention} not registered.")
+    except discord.errors.NotFound:
+        print("search_registration: Interaction expired")
     except Exception as e:
         print(f"Error in search_registration: {e}")
-        await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="delete_registration", description="Delete registration (Admin only)")
 async def delete_registration(interaction: discord.Interaction, user: discord.Member):
     """Delete registration"""
     try:
-        if not utils.has_admin_permissions(interaction.user):
-            await interaction.response.send_message("❌ No permission!", ephemeral=True)
-            return
-        
+        # DEFER IMMEDIATELY
         await interaction.response.defer(ephemeral=True)
+        
+        if not utils.has_admin_permissions(interaction.user):
+            await interaction.followup.send("❌ No permission!")
+            return
         
         registration = await asyncio.to_thread(utils.get_user_registration, str(user.id))
         if not registration:
@@ -477,19 +472,21 @@ async def delete_registration(interaction: discord.Interaction, user: discord.Me
         )
         
         await interaction.followup.send(embed=embed, view=view)
+    except discord.errors.NotFound:
+        print("delete_registration: Interaction expired")
     except Exception as e:
         print(f"Error in delete_registration: {e}")
-        await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.command(name="export_registrations", description="Export CSV (Admin only)")
 async def export_registrations(interaction: discord.Interaction):
     """Export CSV"""
     try:
-        if not utils.has_admin_permissions(interaction.user):
-            await interaction.response.send_message("❌ No permission!", ephemeral=True)
-            return
-        
+        # DEFER IMMEDIATELY
         await interaction.response.defer(ephemeral=True)
+        
+        if not utils.has_admin_permissions(interaction.user):
+            await interaction.followup.send("❌ No permission!")
+            return
         
         success = await asyncio.to_thread(utils.export_registrations_to_csv, config.TEMP_CSV_FILE)
         
@@ -506,32 +503,17 @@ async def export_registrations(interaction: discord.Interaction):
             utils.log_action("EXPORT_CSV", interaction.user, "Exported database")
         else:
             await interaction.followup.send("❌ No registrations found or export failed.")
+    except discord.errors.NotFound:
+        print("export_registrations: Interaction expired")
     except Exception as e:
         print(f"Error in export_registrations: {e}")
-        await interaction.followup.send("❌ An error occurred.", ephemeral=True)
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    """Global error handler for application commands"""
+    """Global error handler - just log, commands handle their own responses"""
     import traceback
     print(f"Command error: {error}")
     traceback.print_exc()
-    
-    # Try to inform the user
-    try:
-        if not interaction.response.is_done():
-            await interaction.response.send_message(
-                "❌ An error occurred while processing your command.",
-                ephemeral=True
-            )
-        else:
-            await interaction.followup.send(
-                "❌ An error occurred.",
-                ephemeral=True
-            )
-    except:
-        # Interaction expired or already fully handled
-        pass
 
 if __name__ == "__main__":
     print("Starting Club Registration Bot...")
